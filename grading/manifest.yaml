@@ -1,0 +1,90 @@
+project:
+  name: restaurant-voice-ordering-agent
+  package_name: restaurant_agent
+  version: 0.1.0
+  description: Phone-capable MCP and RAG restaurant voice ordering agent.
+
+runtime:
+  python_version: "3.11"
+  random_seed: 6263
+  app_host: 0.0.0.0
+  app_port: 8000
+
+models:
+  llm_provider: anthropic
+  llm_model: claude-haiku-4-5
+  llm_api_key_env: ANTHROPIC_API_KEY
+  embedding_provider: sentence-transformers
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+voice_interfaces:
+  primary_production_interface: twilio_programmable_voice
+  local_grading_interface: browser_web_speech_api
+  typed_input_role: fallback_debug_accessibility_only
+
+data:
+  raw_menu_fixture: data/raw/sample_restaurant_menu.html
+  processed_menu: data/processed/menu.json
+  index_dir: data/index
+  menu_chunks: data/index/menu_chunks.json
+  menu_metadata: data/index/menu_metadata.json
+  embeddings: data/index/embeddings.npy
+
+commands:
+  install: make install
+  download_data: make download-data
+  download_models: make download-models
+  reproduce: make reproduce
+  test: make test
+  lint: make lint
+  loadtest: make loadtest
+  demo: make demo
+  preflight: scripts/preflight.sh
+
+reports:
+  unit: reports/unit.xml
+  integration: reports/integration.xml
+  user_stories: reports/user_stories.xml
+  coverage: reports/coverage.xml
+  coverage_html: reports/coverage_html/
+  benchmarks: reports/benchmarks.json
+  security: reports/security.txt
+  walkthrough: reports/walkthrough.md
+  git_contributions: reports/git_contributions.txt
+
+grading:
+  coverage_threshold: 0.70
+  user_story_pass_threshold: 0.90
+  loadtest_min_rps: 10
+  loadtest_max_error_rate: 0.05
+  docker_health_endpoint: /health
+  readiness_endpoint: /ready
+
+external_apis:
+  - name: Anthropic Claude API
+    required_for_full_production_mode: true
+    required_for_local_grading_mode: false
+    api_key_env:
+      - ANTHROPIC_API_KEY
+
+  - name: Twilio Programmable Voice
+    required_for_full_production_mode: true
+    required_for_local_grading_mode: false
+    api_key_env:
+      - TWILIO_ACCOUNT_SID
+      - TWILIO_AUTH_TOKEN
+      - TWILIO_PHONE_NUMBER
+      - TWILIO_WEBHOOK_BASE_URL
+
+  - name: Browser Web Speech API
+    required_for_full_production_mode: false
+    required_for_local_grading_mode: true
+    api_key_env: []
+
+  - name: Hugging Face / sentence-transformers model download
+    required_for_full_production_mode: true
+    required_for_local_grading_mode: true
+    api_key_env: []
+
+commit:
+  commit_sha: TO_BE_FILLED_BEFORE_SUBMISSION

@@ -1,0 +1,74 @@
+apis:
+  - name: Anthropic Claude API
+    provider: Anthropic
+    purpose: Natural-language intent parsing, MCP tool-routing proposal, clarification generation, and spoken response phrasing.
+    required_for_full_production_mode: true
+    required_for_local_grading_mode: false
+    required_environment_variables:
+      - ANTHROPIC_API_KEY
+    optional_environment_variables:
+      - ANTHROPIC_MODEL
+    default_model: claude-haiku-4-5
+    fallback_behavior: >
+      If the key is missing, invalid, rate-limited, times out, or the API is unavailable,
+      the system enters degraded LLM mode. In degraded LLM mode, the system uses deterministic
+      intent parsing and template responses for simple high-confidence requests. Complex or
+      ambiguous order mutations are not performed in degraded mode.
+    setup_notes: >
+      Set ANTHROPIC_API_KEY in .env. ANTHROPIC_MODEL defaults to claude-haiku-4-5.
+      The LLM is not allowed to compute totals, mutate order state directly, invent menu facts,
+      invent prices, or make unsupported allergy-safe claims.
+
+  - name: Twilio Programmable Voice
+    provider: Twilio
+    purpose: Real phone-call voice interface for incoming restaurant ordering calls.
+    required_for_full_production_mode: true
+    required_for_local_grading_mode: false
+    required_environment_variables:
+      - TWILIO_ACCOUNT_SID
+      - TWILIO_AUTH_TOKEN
+      - TWILIO_PHONE_NUMBER
+      - TWILIO_WEBHOOK_BASE_URL
+    optional_environment_variables: []
+    fallback_behavior: >
+      If Twilio credentials are missing or ENABLE_TWILIO is false, the Twilio phone interface
+      is disabled. The local browser voice interface remains available and uses the same backend
+      agent, MCP tools, RAG index, order state, pricing logic, and structured logging.
+    setup_notes: >
+      For production phone mode, configure a Twilio phone number voice webhook to point to
+      /voice/incoming on the deployed public base URL. Automated tests simulate Twilio webhook
+      payloads and do not require a real phone call.
+
+  - name: Browser Web Speech API
+    provider: Browser
+    purpose: Local browser speech recognition and text-to-speech for reproducible voice walkthroughs.
+    required_for_full_production_mode: false
+    required_for_local_grading_mode: true
+    required_environment_variables: []
+    optional_environment_variables: []
+    fallback_behavior: >
+      If browser microphone permission, browser speech recognition, or browser text-to-speech
+      is unavailable, the UI displays a clear message and allows typed utterance fallback for
+      debugging and accessibility. The project remains voice-first; typed input is not the
+      primary user experience.
+    setup_notes: >
+      Use a Chromium-based browser for best support. Backend automated tests do not require
+      a real microphone.
+
+  - name: Hugging Face / sentence-transformers model download
+    provider: Hugging Face / sentence-transformers
+    purpose: Local semantic embeddings for hybrid RAG menu retrieval.
+    required_for_full_production_mode: true
+    required_for_local_grading_mode: true
+    required_environment_variables: []
+    optional_environment_variables:
+      - HF_HOME
+      - TRANSFORMERS_CACHE
+    default_model: sentence-transformers/all-MiniLM-L6-v2
+    fallback_behavior: >
+      If the embedding model cannot be downloaded or loaded, the system enters degraded retrieval
+      mode using structured filters and rapidfuzz lexical matching. The system logs the failure
+      with request_id and continues serving requests without crashing.
+    setup_notes: >
+      The required embedding model is sentence-transformers/all-MiniLM-L6-v2. It is prepared by
+      make download-models or during make reproduce.

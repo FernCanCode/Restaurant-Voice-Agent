@@ -1,0 +1,676 @@
+project:
+  name: restaurant-voice-ordering-agent
+  package: restaurant_agent
+  spec: docs/SPEC.md
+  stories: docs/STORIES.md
+  manifest: grading/manifest.yaml
+
+stories:
+  - id: US-01
+    title: Start a Browser Voice Call and Receive Greeting
+    spec_sections:
+      - Purpose
+      - Voice Interfaces
+      - Public Interfaces
+      - Conversation Flow, Order State, and Dialogue State
+      - Logging and Operability Requirements
+    api_routes:
+      - GET /
+      - GET /ui
+      - POST /api/browser/start-call
+      - POST /api/sessions
+    mcp_tools: []
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/web.py
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/session_store.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_01_start_voice_call.py
+      - tests/integration/test_sessions_api.py
+    manual_screenshot: docs/assets/stories/us_01_expected.png
+    usage_section: docs/usage.md#us-01-start-a-browser-voice-call-and-receive-greeting
+
+  - id: US-02
+    title: Ask a Menu Question Using RAG
+    spec_sections:
+      - Menu Ingestion Strategy
+      - RAG Strategy
+      - MCP Tool Design
+      - Public Interfaces
+    api_routes:
+      - POST /api/turn
+      - POST /api/menu/search
+    mcp_tools:
+      - search_menu
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/menu_retriever.py
+      - src/restaurant_agent/menu_loader.py
+      - src/restaurant_agent/rag_index.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_02_menu_question_rag.py
+      - tests/unit/test_menu_retriever.py
+      - tests/integration/test_menu_api.py
+    manual_screenshot: docs/assets/stories/us_02_expected.png
+    usage_section: docs/usage.md#us-02-ask-a-menu-question-using-rag
+
+  - id: US-03
+    title: Ask a Dietary or Allergen Question
+    spec_sections:
+      - RAG Strategy
+      - Dietary and Allergen Policy
+      - MCP Tool Design
+      - Code Quality and Responsible AI Requirements
+    api_routes:
+      - POST /api/turn
+    mcp_tools:
+      - check_dietary_info
+      - search_menu
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/dietary.py
+      - src/restaurant_agent/menu_retriever.py
+      - src/restaurant_agent/menu_loader.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_03_dietary_question.py
+      - tests/unit/test_dietary.py
+      - tests/edge/test_prompt_injection.py
+    manual_screenshot: docs/assets/stories/us_03_expected.png
+    usage_section: docs/usage.md#us-03-ask-a-dietary-or-allergen-question
+
+  - id: US-04
+    title: Add an Item with Quantity and Modification
+    spec_sections:
+      - MCP Tool Design
+      - Conversation Flow, Order State, and Dialogue State
+      - Customer Name Collection and Confirmation Rules
+      - Public Interfaces
+    api_routes:
+      - POST /api/turn
+      - GET /api/sessions/{session_id}/order
+    mcp_tools:
+      - get_menu_item
+      - add_order_item
+      - compute_total
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+      - src/restaurant_agent/menu_loader.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_04_add_item_with_modification.py
+      - tests/unit/test_order_store.py
+      - tests/unit/test_pricing.py
+      - tests/unit/test_modifications.py
+    manual_screenshot: docs/assets/stories/us_04_expected.png
+    usage_section: docs/usage.md#us-04-add-an-item-with-quantity-and-modification
+
+  - id: US-05
+    title: Add an Unsupported Modification as a Special Instruction
+    spec_sections:
+      - MCP Tool Design
+      - Conversation Flow, Order State, and Dialogue State
+      - Code Quality and Responsible AI Requirements
+    api_routes:
+      - POST /api/turn
+      - GET /api/sessions/{session_id}/order
+    mcp_tools:
+      - get_menu_item
+      - add_order_item
+      - update_order_item
+      - compute_total
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_05_special_instruction.py
+      - tests/unit/test_modifications.py
+      - tests/unit/test_mcp_tools.py
+    manual_screenshot: docs/assets/stories/us_05_expected.png
+    usage_section: docs/usage.md#us-05-add-an-unsupported-modification-as-a-special-instruction
+
+  - id: US-06
+    title: Remove or Update an Item
+    spec_sections:
+      - MCP Tool Design
+      - Conversation Flow, Order State, and Dialogue State
+      - Public Interfaces
+    api_routes:
+      - POST /api/turn
+      - GET /api/sessions/{session_id}/order
+    mcp_tools:
+      - remove_order_item
+      - update_order_item
+      - compute_total
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_06_remove_or_update_item.py
+      - tests/unit/test_order_store.py
+      - tests/unit/test_pricing.py
+    manual_screenshot: docs/assets/stories/us_06_expected.png
+    usage_section: docs/usage.md#us-06-remove-or-update-an-item
+
+  - id: US-07
+    title: Ask for Order Summary and Running Total
+    spec_sections:
+      - MCP Tool Design
+      - Conversation Flow, Order State, and Dialogue State
+      - Public Interfaces
+    api_routes:
+      - POST /api/turn
+      - POST /api/sessions/{session_id}/readback
+      - GET /api/sessions/{session_id}/order
+    mcp_tools:
+      - get_order_summary
+      - compute_total
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_07_summary_and_total.py
+      - tests/unit/test_pricing.py
+      - tests/integration/test_sessions_api.py
+    manual_screenshot: docs/assets/stories/us_07_expected.png
+    usage_section: docs/usage.md#us-07-ask-for-order-summary-and-running-total
+
+  - id: US-08
+    title: Provide Customer Name and Confirm Order
+    spec_sections:
+      - Conversation Flow, Order State, and Dialogue State
+      - Customer Name Collection and Confirmation Rules
+      - Payment Processing Scope
+      - Public Interfaces
+    api_routes:
+      - POST /api/turn
+      - POST /api/sessions/{session_id}/readback
+      - POST /api/sessions/{session_id}/confirm
+      - GET /api/sessions/{session_id}/order
+    mcp_tools:
+      - get_order_summary
+      - compute_total
+      - confirm_order
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+      - src/restaurant_agent/session_store.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_08_name_and_confirm.py
+      - tests/unit/test_order_store.py
+      - tests/edge/test_confirmation_edge_cases.py
+    manual_screenshot: docs/assets/stories/us_08_expected.png
+    usage_section: docs/usage.md#us-08-provide-customer-name-and-confirm-order
+
+  - id: US-09
+    title: Error Path — Unknown Menu Item
+    spec_sections:
+      - RAG Strategy
+      - MCP Tool Design
+      - Conversation Flow, Order State, and Dialogue State
+      - Code Quality and Responsible AI Requirements
+    api_routes:
+      - POST /api/turn
+      - GET /api/sessions/{session_id}/order
+    mcp_tools:
+      - search_menu
+      - get_menu_item
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/menu_retriever.py
+      - src/restaurant_agent/menu_loader.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_09_unknown_menu_item.py
+      - tests/edge/test_order_edge_cases.py
+      - tests/edge/test_prompt_injection.py
+    manual_screenshot: docs/assets/stories/us_09_expected.png
+    usage_section: docs/usage.md#us-09-error-path-unknown-menu-item
+
+  - id: US-10
+    title: Error Path — Ambiguous Removal or Item Reference
+    spec_sections:
+      - MCP Tool Design
+      - Conversation Flow, Order State, and Dialogue State
+      - Public Interfaces
+    api_routes:
+      - POST /api/turn
+      - GET /api/sessions/{session_id}/order
+    mcp_tools:
+      - remove_order_item
+      - update_order_item
+      - get_order_summary
+    source_modules:
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/session_store.py
+      - src/restaurant_agent/schemas.py
+    tests:
+      - tests/user_stories/test_us_10_ambiguous_removal.py
+      - tests/unit/test_order_store.py
+      - tests/edge/test_order_edge_cases.py
+    manual_screenshot: docs/assets/stories/us_10_expected.png
+    usage_section: docs/usage.md#us-10-error-path-ambiguous-removal-or-item-reference
+
+mcp_tools:
+  - name: search_menu
+    spec_sections:
+      - RAG Strategy
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/menu_retriever.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_menu_retriever.py
+      - tests/integration/test_menu_api.py
+
+  - name: get_menu_item
+    spec_sections:
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/menu_loader.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_menu_loader.py
+
+  - name: check_dietary_info
+    spec_sections:
+      - RAG Strategy
+      - Dietary and Allergen Policy
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/dietary.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_dietary.py
+
+  - name: add_order_item
+    spec_sections:
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_order_store.py
+      - tests/unit/test_pricing.py
+
+  - name: remove_order_item
+    spec_sections:
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_order_store.py
+      - tests/unit/test_pricing.py
+
+  - name: update_order_item
+    spec_sections:
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_order_store.py
+      - tests/unit/test_modifications.py
+
+  - name: get_order_summary
+    spec_sections:
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_order_store.py
+
+  - name: compute_total
+    spec_sections:
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/pricing.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_pricing.py
+
+  - name: confirm_order
+    spec_sections:
+      - MCP Tool Design
+      - Customer Name Collection and Confirmation Rules
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+      - src/restaurant_agent/pricing.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/edge/test_confirmation_edge_cases.py
+
+  - name: cancel_order
+    spec_sections:
+      - MCP Tool Design
+    source_modules:
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+    tests:
+      - tests/unit/test_mcp_tools.py
+      - tests/unit/test_order_store.py
+
+api_routes:
+  - method: GET
+    path: /
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/web.py
+    tests:
+      - tests/integration/test_health_ready.py
+      - tests/user_stories/test_us_01_start_voice_call.py
+
+  - method: GET
+    path: /ui
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/web.py
+    tests:
+      - tests/integration/test_health_ready.py
+      - tests/user_stories/test_us_01_start_voice_call.py
+
+  - method: GET
+    path: /health
+    source_modules:
+      - src/restaurant_agent/api.py
+    tests:
+      - tests/integration/test_health_ready.py
+
+  - method: GET
+    path: /ready
+    source_modules:
+      - src/restaurant_agent/api.py
+    tests:
+      - tests/integration/test_health_ready.py
+
+  - method: GET
+    path: /api/status
+    source_modules:
+      - src/restaurant_agent/api.py
+    tests:
+      - tests/integration/test_health_ready.py
+
+  - method: POST
+    path: /api/sessions
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/session_store.py
+      - src/restaurant_agent/order_store.py
+    tests:
+      - tests/integration/test_sessions_api.py
+
+  - method: POST
+    path: /api/turn
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/agent.py
+    tests:
+      - tests/integration/test_agent_turn_api.py
+      - tests/user_stories/test_us_02_menu_question_rag.py
+      - tests/user_stories/test_us_04_add_item_with_modification.py
+
+  - method: GET
+    path: /api/sessions/{session_id}
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/session_store.py
+    tests:
+      - tests/integration/test_sessions_api.py
+
+  - method: GET
+    path: /api/sessions/{session_id}/order
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/order_store.py
+    tests:
+      - tests/integration/test_sessions_api.py
+
+  - method: POST
+    path: /api/sessions/{session_id}/readback
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/agent.py
+      - src/restaurant_agent/mcp_server.py
+    tests:
+      - tests/integration/test_sessions_api.py
+      - tests/user_stories/test_us_07_summary_and_total.py
+
+  - method: POST
+    path: /api/sessions/{session_id}/confirm
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+    tests:
+      - tests/integration/test_sessions_api.py
+      - tests/user_stories/test_us_08_name_and_confirm.py
+
+  - method: POST
+    path: /api/sessions/{session_id}/cancel
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/mcp_server.py
+      - src/restaurant_agent/order_store.py
+    tests:
+      - tests/integration/test_sessions_api.py
+
+  - method: POST
+    path: /voice/incoming
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/twilio_voice.py
+    tests:
+      - tests/integration/test_twilio_routes.py
+
+  - method: POST
+    path: /voice/turn
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/twilio_voice.py
+      - src/restaurant_agent/agent.py
+    tests:
+      - tests/integration/test_twilio_routes.py
+
+  - method: POST
+    path: /voice/status
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/twilio_voice.py
+    tests:
+      - tests/integration/test_twilio_routes.py
+
+  - method: GET
+    path: /voice/config-check
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/twilio_voice.py
+    tests:
+      - tests/integration/test_twilio_routes.py
+
+  - method: POST
+    path: /api/browser/start-call
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/web.py
+      - src/restaurant_agent/session_store.py
+    tests:
+      - tests/user_stories/test_us_01_start_voice_call.py
+      - tests/integration/test_sessions_api.py
+
+  - method: POST
+    path: /api/browser/voice-turn
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/web.py
+      - src/restaurant_agent/agent.py
+    tests:
+      - tests/integration/test_agent_turn_api.py
+
+  - method: POST
+    path: /api/menu/ingest-text
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/menu_ingestion.py
+    tests:
+      - tests/integration/test_menu_api.py
+      - tests/unit/test_menu_ingestion.py
+
+  - method: POST
+    path: /api/menu/ingest-url
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/menu_ingestion.py
+    tests:
+      - tests/integration/test_menu_api.py
+
+  - method: POST
+    path: /api/menu/ingest-file
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/menu_ingestion.py
+    tests:
+      - tests/integration/test_menu_api.py
+      - tests/edge/test_menu_ingestion_edge_cases.py
+
+  - method: POST
+    path: /api/menu/rebuild-index
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/rag_index.py
+    tests:
+      - tests/integration/test_menu_api.py
+      - tests/unit/test_rag_index.py
+
+  - method: GET
+    path: /api/menu/items
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/menu_loader.py
+    tests:
+      - tests/integration/test_menu_api.py
+      - tests/unit/test_menu_loader.py
+
+  - method: GET
+    path: /api/menu/items/{item_id}
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/menu_loader.py
+    tests:
+      - tests/integration/test_menu_api.py
+      - tests/unit/test_menu_loader.py
+
+  - method: POST
+    path: /api/menu/search
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/menu_retriever.py
+    tests:
+      - tests/integration/test_menu_api.py
+      - tests/unit/test_menu_retriever.py
+
+  - method: GET
+    path: /api/logging/example
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/logging_config.py
+    tests:
+      - tests/integration/test_logging_trace.py
+
+  - method: GET
+    path: /api/debug/session/{session_id}
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/session_store.py
+      - src/restaurant_agent/order_store.py
+    tests:
+      - tests/integration/test_sessions_api.py
+
+  - method: GET
+    path: /api/debug/sessions/recent
+    source_modules:
+      - src/restaurant_agent/api.py
+      - src/restaurant_agent/session_store.py
+      - src/restaurant_agent/order_store.py
+    tests:
+      - tests/integration/test_sessions_api.py
+      - tests/integration/test_logging_trace.py
+
+reproducibility:
+  commands:
+    - make install
+    - make download-data
+    - make download-models
+    - make reproduce
+    - make test
+    - make lint
+    - make loadtest
+    - make demo
+    - scripts/preflight.sh
+    - scripts/demo.sh
+    - scripts/regenerate.sh
+  docs:
+    - README.md
+    - docs/SPEC.md
+    - docs/STORIES.md
+    - docs/DATA.md
+    - docs/MODELS.md
+    - docs/REPRODUCE.md
+    - docs/MODEL_CARD.md
+    - docs/LOGGING.md
+    - docs/usage.md
+    - docs/benchmarks.md
+  scripts:
+    - scripts/demo.sh
+    - scripts/preflight.sh
+    - scripts/regenerate.sh
+    - scripts/regenerate_prompt.md
+  reports:
+    - reports/unit.xml
+    - reports/integration.xml
+    - reports/user_stories.xml
+    - reports/coverage.xml
+    - reports/coverage_html/
+    - reports/benchmarks.json
+    - reports/security.txt
+    - reports/walkthrough.md
+    - reports/git_contributions.txt

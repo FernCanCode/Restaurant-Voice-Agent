@@ -1,0 +1,75 @@
+flowchart TD
+    %% External users and voice interfaces
+    PhoneCaller[Phone Caller] --> Twilio[Twilio Programmable Voice]
+    BrowserUser[Browser Voice User / TA] --> BrowserUI[Browser Voice UI]
+
+    %% Twilio phone route path
+    Twilio --> VoiceIncoming[POST /voice/incoming]
+    Twilio --> VoiceTurn[POST /voice/turn]
+    Twilio --> VoiceStatus[POST /voice/status]
+
+    %% Browser route path
+    BrowserUI --> BrowserStart[POST /api/browser/start-call]
+    BrowserUI --> BrowserTurn[POST /api/browser/voice-turn]
+    BrowserUI --> RootUI[GET / or GET /ui]
+
+    %% Shared API layer
+    VoiceIncoming --> Routes[FastAPI Route Layer]
+    VoiceTurn --> Routes
+    VoiceStatus --> Routes
+    BrowserStart --> Routes
+    BrowserTurn --> Routes
+    RootUI --> Routes
+
+    %% Shared agent core
+    Routes --> Agent[Shared Agent Orchestrator]
+
+    %% LLM and fallback
+    Agent --> LLM[Anthropic Claude Haiku\nclaude-haiku-4-5]
+    Agent --> Fallback[Deterministic Fallback Parser]
+
+    %% MCP layer
+    Agent --> MCP[MCP Tool Registry]
+
+    MCP --> MenuTools[Menu Search and Dietary Tools\nsearch_menu / get_menu_item / check_dietary_info]
+    MCP --> OrderTools[Order Mutation and Confirmation Tools\nadd / remove / update / summary / confirm / cancel]
+    MCP --> TotalTool[Pricing and Total Tool\ncompute_total]
+
+    %% Menu/RAG layer
+    MenuTools --> Retriever[Hybrid RAG Menu Retriever]
+    Retriever --> CanonicalMenu[Canonical Menu JSON\ndata/processed/menu.json]
+    Retriever --> RAGIndex[RAG Index Files\ndata/index/menu_chunks.json\ndata/index/menu_metadata.json]
+    Retriever --> Embeddings[Local Embeddings\ndata/index/embeddings.npy\nall-MiniLM-L6-v2]
+
+    %% Order and pricing layer
+    OrderTools --> OrderStore[Order Store]
+    TotalTool --> Pricing[Pricing Module]
+    Pricing --> CanonicalMenu
+    Pricing --> OrderStore
+
+    %% Session and dialogue state
+    Agent --> SessionStore[Session and Dialogue State Store]
+    SessionStore --> TwilioMap[Twilio CallSid to Session ID Map]
+    TwilioMap --> PhoneObservability[Phone Observability\ntwilio_call_sid + session_id]
+
+    %% Menu ingestion pipeline
+    MenuInput[Restaurant Menu URL / File / Text / Fixture] --> Ingestion[Menu Ingestion Pipeline]
+    Ingestion --> CanonicalMenu
+    CanonicalMenu --> IndexBuilder[RAG Index Builder]
+    IndexBuilder --> RAGIndex
+    IndexBuilder --> Embeddings
+
+    %% Logging and debug inspection
+    Routes --> Logs[Structured JSON Logs]
+    Agent --> Logs
+    MCP --> Logs
+    Retriever --> Logs
+    OrderStore --> Logs
+    Pricing --> Logs
+    LLM --> Logs
+    Fallback --> Logs
+
+    Routes --> DebugRoutes[Debug and Session Inspection Routes\nGET /api/debug/sessions/recent\nGET /api/debug/session/{session_id}]
+    DebugRoutes --> SessionStore
+    DebugRoutes --> OrderStore
+    DebugRoutes --> PhoneObservability

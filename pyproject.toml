@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "restaurant-voice-agent"
+version = "0.1.0"
+description = "A phone-capable restaurant voice ordering agent"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.111.0",
+    "uvicorn[standard]==0.29.0",
+    "pydantic==2.7.1",
+    "pydantic-settings==2.2.1",
+    "anthropic==0.26.0",
+    "sentence-transformers==2.7.0",
+    "rapidfuzz==3.9.0",
+    "numpy==1.26.4",
+    "twilio==9.0.5",
+    "python-dotenv==1.0.1",
+    "structlog==24.1.0",
+    "httpx==0.27.0",
+    "python-multipart==0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "locust==2.28.0",
+    "pytest==8.2.0",
+    "pytest-cov==5.0.0",
+    "pytest-asyncio==0.23.6",
+    "ruff==0.4.4",
+    "black==24.4.2",
+    "mypy==1.10.0",
+    "pip-audit==2.7.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "unit: mark test as a unit test",
+    "integration: mark test as an integration test",
+    "user_story: mark test as a user story test",
+    "edge: mark test as an edge case test",
+    "load: mark test as a load test",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "sentence_transformers.*"
+ignore_missing_imports = true

@@ -1,0 +1,375 @@
+# Restaurant Voice Ordering Agent
+
+## Overview
+
+The Restaurant Voice Ordering Agent is a phone-capable, MCP-enabled, RAG-grounded restaurant voice ordering agent.
+
+It shall:
+- greet restaurant callers
+- answer menu questions using retrieved menu evidence
+- handle dietary/allergen questions cautiously
+- add, remove, and update order items
+- support modifications and special instructions
+- track running totals
+- collect customer name
+- read back the order
+- confirm or cancel the order
+
+The primary production interface is Twilio Programmable Voice and the local browser voice interface is the reproducible walkthrough interface.
+
+## Key Features
+
+- Twilio-compatible phone voice routes
+- browser voice walkthrough
+- shared backend agent orchestrator
+- MCP tool layer
+- RAG menu retrieval
+- canonical menu ingestion
+- deterministic pricing and totals
+- customer name collection
+- required readback before confirmation
+- degraded LLM mode
+- degraded retrieval mode
+- structured JSON logging
+- debug/session inspection routes
+- automated tests
+- Docker Compose deployment
+
+## Technology Stack
+
+- Python 3.11
+- FastAPI
+- Uvicorn
+- Pydantic
+- Anthropic Claude Haiku, default model `claude-haiku-4-5`
+- MCP tool layer
+- sentence-transformers
+- `sentence-transformers/all-MiniLM-L6-v2`
+- rapidfuzz
+- NumPy
+- Twilio Programmable Voice
+- Browser Web Speech API
+- pytest
+- pytest-cov
+- ruff
+- black
+- mypy
+- pip-audit
+- Locust
+- Docker and Docker Compose
+
+## Architecture Summary
+
+- Twilio phone calls and browser voice turns both route into the same FastAPI backend.
+- Both paths use the same shared agent orchestrator.
+- The agent uses Anthropic Claude Haiku for language understanding and tool-routing proposals.
+- MCP tools perform deterministic menu lookup, dietary lookup, order mutation, total calculation, confirmation, and cancellation.
+- RAG retrieves grounded menu evidence from canonical menu JSON and local index files.
+- The LLM does not compute totals or mutate order state.
+
+Architecture diagrams and specification:
+- [docs/SPEC.md](docs/SPEC.md)
+- [docs/diagrams/architecture.svg](docs/diagrams/architecture.svg)
+- [docs/diagrams/architecture.mmd](docs/diagrams/architecture.mmd)
+
+## Voice Interfaces
+
+### Production phone path
+
+Routes:
+- `POST /voice/incoming`
+- `POST /voice/turn`
+- `POST /voice/status`
+- `GET /voice/config-check`
+
+Requires Twilio credentials and a public webhook URL.
+
+### Local browser voice path
+
+Routes:
+- `GET /`
+- `GET /ui`
+- `POST /api/browser/start-call`
+- `POST /api/browser/voice-turn`
+
+Used for local reproducible walkthroughs and does not require Twilio credentials.
+
+### Shared API Routes
+
+Routes:
+- `GET /health`
+- `GET /ready`
+- `GET /api/status`
+- `POST /api/sessions`
+- `POST /api/turn`
+- `GET /api/sessions/{session_id}`
+- `GET /api/sessions/{session_id}/order`
+- `POST /api/sessions/{session_id}/readback`
+- `POST /api/sessions/{session_id}/confirm`
+- `POST /api/sessions/{session_id}/cancel`
+- `POST /api/menu/ingest-text`
+- `POST /api/menu/ingest-url`
+- `POST /api/menu/ingest-file`
+- `POST /api/menu/rebuild-index`
+- `GET /api/menu/items`
+- `GET /api/menu/items/{item_id}`
+- `POST /api/menu/search`
+- `GET /api/logging/example`
+- `GET /api/debug/sessions/recent`
+- `GET /api/debug/session/{session_id}`
+
+## Quick Start
+
+```bash
+git clone <repo_url>
+cd <repo_name>
+cp .env.example .env
+# Edit .env and fill keys listed in api_dependencies.yaml.
+docker compose up --build
+```
+
+Then:
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/ready
+```
+
+Then open:
+```text
+http://localhost:8000
+```
+
+## API Dependencies
+
+For a complete list of dependencies, see:
+```text
+api_dependencies.yaml
+```
+
+Dependencies:
+- Anthropic Claude API
+- Twilio Programmable Voice
+- Browser Web Speech API
+- Hugging Face / sentence-transformers model download
+
+- No personal API keys are committed.
+- All keys are read from `.env`.
+- The TA/professor supplies their own keys when needed.
+
+## Environment Configuration
+
+Configuration template:
+```text
+.env.example
+```
+
+Important variables:
+- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_MODEL`
+- `ENABLE_TWILIO`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_PHONE_NUMBER`
+- `TWILIO_WEBHOOK_BASE_URL`
+- `ENABLE_BROWSER_VOICE`
+- `MENU_RAW_FIXTURE_PATH`
+- `MENU_DATA_PATH`
+- `MENU_INDEX_PATH`
+- `HF_HOME`
+- `TRANSFORMERS_CACHE`
+- `ENABLE_DEBUG_ROUTES`
+
+- Twilio credentials are required when `ENABLE_TWILIO=true`.
+- Browser walkthrough does not require Twilio.
+- Missing Anthropic should trigger degraded LLM mode for simple supported flows.
+
+## Running the App
+
+```bash
+docker compose up --build
+```
+
+Expected:
+- app listens on `http://localhost:8000`
+- `/health` works
+- `/ready` works
+- browser voice UI loads
+- Twilio routes are registered
+
+## Health and Readiness Checks
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/ready
+```
+
+- `/health`: Checks if the service is alive and responding.
+- `/ready`: Reports menu, RAG, MCP, Anthropic, Twilio, browser voice, and degraded-mode status.
+
+## Reproducing Data and Indexes
+
+```bash
+make download-data
+make download-models
+make reproduce
+```
+
+Expected generated files:
+- `data/processed/menu.json`
+- `data/index/menu_chunks.json`
+- `data/index/menu_metadata.json`
+- `data/index/embeddings.npy`
+
+## Running Tests
+
+```bash
+make test
+```
+
+Expected reports:
+- `reports/unit.xml`
+- `reports/integration.xml`
+- `reports/user_stories.xml`
+- `reports/coverage.xml`
+- `reports/coverage_html/`
+
+Targets:
+- business logic coverage target: at least 70 percent
+- user-story pass target: at least 90 percent
+
+## Linting and Security Checks
+
+```bash
+make lint
+```
+
+Tools:
+- ruff
+- black --check
+- mypy
+- pip-audit
+
+Expected report:
+- `reports/security.txt`
+
+## Load Testing
+
+```bash
+make loadtest
+```
+
+Expected report:
+- `reports/benchmarks.json`
+
+Targets:
+- 10 requests per second when resources allow
+- under 5 percent error rate
+
+## Demo Walkthrough
+
+```bash
+make demo
+```
+or:
+```bash
+scripts/demo.sh
+```
+
+The demo should exercise:
+- greeting
+- menu search
+- dietary question
+- add item
+- modification
+- total
+- customer name
+- readback
+- confirmation
+
+## Phone Path Verification
+
+When Twilio credentials and public webhook are configured, the TA can verify phone behavior through:
+1. spoken Twilio phone call
+2. structured Docker logs
+3. `twilio_call_sid`
+4. `session_id`
+5. `GET /api/debug/sessions/recent`
+6. `GET /api/debug/session/{session_id}`
+
+```bash
+docker compose logs app | grep "<twilio_call_sid>"
+curl http://localhost:8000/api/debug/sessions/recent
+curl http://localhost:8000/api/debug/session/<session_id>
+```
+
+The phone call itself is the user interface; logs and debug routes provide grading observability.
+
+## Project Documentation
+
+- [docs/SPEC.md](docs/SPEC.md)
+- [docs/STORIES.md](docs/STORIES.md)
+- [docs/usage.md](docs/usage.md)
+- [docs/DATA.md](docs/DATA.md)
+- [docs/MODELS.md](docs/MODELS.md)
+- [docs/REPRODUCE.md](docs/REPRODUCE.md)
+- [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
+- [docs/LOGGING.md](docs/LOGGING.md)
+- [docs/benchmarks.md](docs/benchmarks.md)
+- [docs/diagrams/architecture.svg](docs/diagrams/architecture.svg)
+- [grading/traceability.yaml](grading/traceability.yaml)
+- [grading/manifest.yaml](grading/manifest.yaml)
+
+## Generated Reports
+
+| Report | Path | Generated By |
+|---|---|---|
+| Unit tests | `reports/unit.xml` | `make test` |
+| Integration tests | `reports/integration.xml` | `make test` |
+| User story tests | `reports/user_stories.xml` | `make test` |
+| Coverage XML | `reports/coverage.xml` | `make test` |
+| Coverage HTML | `reports/coverage_html/` | `make test` |
+| Security audit | `reports/security.txt` | `make lint` |
+| Benchmarks | `reports/benchmarks.json` | `make loadtest` |
+| Walkthrough notes | `reports/walkthrough.md` | Manual walkthrough |
+| Git contributions | `reports/git_contributions.txt` | contribution report command |
+
+## Known Limitations
+
+- no payment processing
+- no payment card collection
+- no real POS submission
+- no guaranteed allergy safety
+- no universal website scraping
+- no real-time inventory unless represented in ingested menu
+- Twilio live phone mode requires credentials and public webhook URL
+- browser voice quality depends on browser and microphone
+- menu answers are limited to ingested menu data
+
+## Responsible AI and Safety Boundaries
+
+- LLM cannot compute totals
+- LLM cannot mutate order state directly
+- LLM cannot invent menu items or prices
+- MCP tools are authoritative for actions
+- dietary/allergen claims must be grounded
+- customer name and readback are required before confirmation
+- payment collection is refused
+- logs must not expose secrets or payment data
+
+Read the full model card:
+- [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
+
+## Project Structure
+
+- `src/restaurant_agent/`
+- `tests/`
+- `docs/`
+- `data/`
+- `grading/`
+- `scripts/`
+- `reports/`
+
+## Contribution Summary
+
+- [CONTRIBUTIONS.md](CONTRIBUTIONS.md)
+- `reports/git_contributions.txt`
