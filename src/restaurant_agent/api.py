@@ -1,5 +1,9 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from pathlib import Path
+from urllib.parse import urljoin, urlparse
+
+import httpx
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, Response
 from typing import Dict, Any, cast
 
 from restaurant_agent import __version__
@@ -21,10 +25,12 @@ from restaurant_agent.schemas import (
     RetrievalMode,
 )
 from restaurant_agent import agent
+from restaurant_agent.menu_ingestion import ingest_menu_text, write_canonical_menu
 from restaurant_agent.menu_loader import load_menu, list_available_items, get_item_by_id
 from restaurant_agent.menu_retriever import search_menu
 from restaurant_agent.rag_index import build_rag_index, load_rag_metadata
 from restaurant_agent.session_store import (
+    find_session_by_twilio_call_sid,
     get_session,
     set_dialogue_mode,
     list_recent_sessions,
@@ -35,11 +41,65 @@ from restaurant_agent.order_store import (
     confirm_order,
     cancel_order,
 )
+from restaurant_agent.twilio_voice import (
+    build_gather_response,
+    build_goodbye_response,
+    build_say_response,
+    extract_speech_result,
+    extract_twilio_call_sid,
+    is_twilio_configured,
+)
 
 from restaurant_agent.web import render_browser_ui
 
 app = FastAPI(title="restaurant-voice-agent")
-app.add_middleware(RequestIDMiddleware)
+app.add_middleware(cast(Any, RequestIDMiddleware))
+
+
+def _voice_xml_response(twiml: str) -> Response:
+    return Response(content=twiml, media_type="application/xml")
+
+
+def _coerce_bool(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _ingest_menu_payload(
+    *, request_id: str, text: str, rebuild_index: bool
+) -> Dict[str, Any]:
+    settings = get_settings()
+    menu = ingest_menu_text(text)
+    output_path = write_canonical_menu(menu, settings.menu_data_path)
+
+    if rebuild_index:
+        build_rag_index(
+            settings.menu_data_path,
+            settings.menu_index_path,
+            allow_embedding_failure=True,
+        )
+
+    return {
+        "status": "success",
+        "item_count": len(menu.items),
+        "output_path": str(output_path),
+        "index_rebuilt": rebuild_index,
+        "request_id": request_id,
+    }
+
+
+def _voice_action_url(path: str) -> str:
+    settings = get_settings()
+    if settings.twilio_webhook_base_url:
+        return urljoin(
+            settings.twilio_webhook_base_url.rstrip("/") + "/", path.lstrip("/")
+        )
+    return path
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -129,6 +189,102 @@ def search_menu_endpoint(
     )
 
 
+@app.post("/api/menu/ingest-text")
+def ingest_menu_text_endpoint(
+    request: Request, payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    text = str(payload.get("text", ""))
+    rebuild_index = _coerce_bool(payload.get("rebuild_index"), default=True)
+
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Text content is required")
+
+    try:
+        return _ingest_menu_payload(
+            request_id=request.state.request_id,
+            text=text,
+            rebuild_index=rebuild_index,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/menu/ingest-url")
+def ingest_menu_url_endpoint(
+    request: Request, payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    url = str(payload.get("url", "")).strip()
+    rebuild_index = _coerce_bool(payload.get("rebuild_index"), default=True)
+    parsed = urlparse(url)
+
+    if not url or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(
+            status_code=400,
+            detail="Only http and https URLs are supported for menu ingestion",
+        )
+
+    try:
+        response = httpx.get(url, timeout=5.0, follow_redirects=True)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch menu URL: {exc.__class__.__name__}",
+        ) from exc
+
+    if not response.text.strip():
+        raise HTTPException(status_code=400, detail="Fetched menu content was empty")
+
+    try:
+        return _ingest_menu_payload(
+            request_id=request.state.request_id,
+            text=response.text,
+            rebuild_index=rebuild_index,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/menu/ingest-file")
+async def ingest_menu_file_endpoint(
+    request: Request,
+    file: UploadFile = File(...),
+    rebuild_index: bool = Form(True),
+) -> Dict[str, Any]:
+    filename = file.filename or ""
+    suffix = Path(filename).suffix.lower()
+    supported_extensions = {".txt", ".md", ".html", ".htm", ".csv", ".json"}
+
+    if suffix not in supported_extensions:
+        raise HTTPException(status_code=400, detail="Unsupported file extension")
+    if suffix in {".csv", ".json"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Structured {suffix} ingestion is not implemented in this phase",
+        )
+
+    try:
+        content = (await file.read()).decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400, detail="Uploaded file must be UTF-8 text"
+        ) from exc
+    finally:
+        await file.close()
+
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Uploaded file was empty")
+
+    try:
+        return _ingest_menu_payload(
+            request_id=request.state.request_id,
+            text=content,
+            rebuild_index=rebuild_index,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/menu/rebuild-index")
 def rebuild_index() -> Any:
     settings = get_settings()
@@ -175,6 +331,114 @@ def api_browser_voice_turn(request: Request, payload: AgentTurnRequest) -> Any:
         return agent.process_turn(request=payload, request_id=request.state.request_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/voice/config-check")
+def voice_config_check() -> Dict[str, Any]:
+    settings = get_settings()
+    missing_fields = []
+    if not settings.twilio_account_sid:
+        missing_fields.append("TWILIO_ACCOUNT_SID")
+    if not settings.twilio_auth_token:
+        missing_fields.append("TWILIO_AUTH_TOKEN")
+    if not settings.twilio_phone_number:
+        missing_fields.append("TWILIO_PHONE_NUMBER")
+    if not settings.twilio_webhook_base_url:
+        missing_fields.append("TWILIO_WEBHOOK_BASE_URL")
+
+    return {
+        "enabled": settings.enable_twilio,
+        "configured": is_twilio_configured(),
+        "phone_number_configured": bool(settings.twilio_phone_number),
+        "webhook_base_url_configured": bool(settings.twilio_webhook_base_url),
+        "missing_fields": missing_fields,
+    }
+
+
+@app.post("/voice/incoming")
+async def voice_incoming(request: Request) -> Response:
+    form = await request.form()
+    form_data = dict(form)
+    call_sid = extract_twilio_call_sid(form_data)
+
+    session = agent.start_session(
+        channel=Channel.twilio,
+        twilio_call_sid=call_sid,
+        request_id=request.state.request_id,
+    )
+
+    action_url = _voice_action_url("/voice/turn")
+    return _voice_xml_response(
+        build_gather_response(session.agent_text, action_url=action_url)
+    )
+
+
+@app.post("/voice/turn")
+async def voice_turn(request: Request) -> Response:
+    form = await request.form()
+    form_data = dict(form)
+    call_sid = extract_twilio_call_sid(form_data)
+    speech_result = extract_speech_result(form_data)
+
+    session_state = (
+        find_session_by_twilio_call_sid(call_sid) if call_sid is not None else None
+    )
+    if session_state is None:
+        session = agent.start_session(
+            channel=Channel.twilio,
+            twilio_call_sid=call_sid,
+            request_id=request.state.request_id,
+        )
+        session_id = session.session_id
+    else:
+        session_id = session_state.session_id
+
+    if not speech_result:
+        return _voice_xml_response(
+            build_say_response("I didn't catch that. Please say that again.")
+        )
+
+    payload = AgentTurnRequest(
+        session_id=session_id,
+        utterance=speech_result,
+        channel=Channel.twilio,
+        metadata={"twilio_call_sid": call_sid} if call_sid else {},
+    )
+
+    try:
+        turn_response = agent.process_turn(
+            request=payload, request_id=request.state.request_id
+        )
+    except ValueError:
+        return _voice_xml_response(
+            build_say_response("Sorry, I couldn't process that. Please try again.")
+        )
+
+    if turn_response.order.status.value in {
+        "confirmed",
+        "cancelled",
+    } or turn_response.dialogue_mode in {
+        DialogueMode.CONFIRMED,
+        DialogueMode.CANCELLED,
+    }:
+        return _voice_xml_response(build_goodbye_response(turn_response.agent_text))
+
+    action_url = _voice_action_url("/voice/turn")
+    return _voice_xml_response(
+        build_gather_response(turn_response.agent_text, action_url=action_url)
+    )
+
+
+@app.post("/voice/status")
+async def voice_status(request: Request) -> Dict[str, Any]:
+    form = await request.form()
+    form_data = dict(form)
+    return {
+        "status": "acknowledged",
+        "call_sid": extract_twilio_call_sid(form_data),
+        "call_status": str(form_data.get("CallStatus", "")).strip() or None,
+        "request_id": request.state.request_id,
+    }
 
 
 @app.get("/api/sessions/{session_id}")

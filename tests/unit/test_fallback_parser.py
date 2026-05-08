@@ -16,8 +16,20 @@ def test_menu_search_by_item_name():
     assert res.safe_to_execute is True
 
 
+def test_menu_search_tacos_only_phrase():
+    res = parse_fallback_intent("Tacos.")
+    assert res.tool_name == "search_menu"
+    assert res.safe_to_execute is True
+
+
 def test_menu_search_generic():
     res = parse_fallback_intent("Show me the menu")
+    assert res.tool_name == "search_menu"
+    assert res.safe_to_execute is True
+
+
+def test_menu_search_vegetarian_listing():
+    res = parse_fallback_intent("what kind of vegetarian items do you have")
     assert res.tool_name == "search_menu"
     assert res.safe_to_execute is True
 
@@ -46,6 +58,39 @@ def test_quantity_two_parsed():
     assert res.arguments["quantity"] == 2
 
 
+def test_could_i_get_two_chicken_tacos():
+    res = parse_fallback_intent(
+        "could I get two chicken tacos",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.tool_name == "add_order_item"
+    assert res.arguments["item_id"] == "chicken_tacos"
+    assert res.arguments["quantity"] == 2
+    assert res.safe_to_execute is True
+
+
+def test_can_i_have_a_lemonade():
+    res = parse_fallback_intent(
+        "can I have a lemonade",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.tool_name == "add_order_item"
+    assert res.arguments["item_id"] == "lemonade"
+    assert res.arguments["quantity"] == 1
+    assert res.safe_to_execute is True
+
+
+def test_one_horchata_please():
+    res = parse_fallback_intent(
+        "one horchata please",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.tool_name == "add_order_item"
+    assert res.arguments["item_id"] == "horchata"
+    assert res.arguments["quantity"] == 1
+    assert res.safe_to_execute is True
+
+
 def test_chicken_tacos_maps_to_id():
     res = parse_fallback_intent(
         "Add a chicken taco",
@@ -70,6 +115,35 @@ def test_extra_queso_not_safe_to_execute():
     assert res.safe_to_execute is False
     assert res.clarification_question is not None
     assert "extra queso" in res.clarification_question.lower()
+
+
+def test_natural_phrase_with_special_instruction_is_safe():
+    res = parse_fallback_intent(
+        "I'd like two chicken tacos with no onions",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.tool_name == "add_order_item"
+    assert res.arguments["quantity"] == 2
+    assert "no onions" in res.arguments["special_instructions"]
+    assert res.safe_to_execute is True
+
+
+def test_lobster_pizza_does_not_add_unknown_item():
+    res = parse_fallback_intent(
+        "could I get lobster pizza",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.safe_to_execute is False
+    assert res.tool_name is None
+    assert res.clarification_question is not None
+
+
+def test_broad_add_request_is_not_safe_to_execute():
+    res = parse_fallback_intent("give me all of it")
+    assert res.intent == "broad_add_request"
+    assert res.tool_name is None
+    assert res.safe_to_execute is False
+    assert res.clarification_question is not None
 
 
 # ── Compute total ───────────────────────────────────────────────────────
@@ -165,6 +239,15 @@ def test_confirm_order():
         session_context={"session_id": "sess_test"},
     )
     assert res.tool_name == "confirm_order"
+    assert res.safe_to_execute is True
+
+
+def test_conversation_done_phrase():
+    res = parse_fallback_intent(
+        "that's it",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.intent == "conversation_done"
     assert res.safe_to_execute is True
 
 

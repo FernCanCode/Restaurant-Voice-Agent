@@ -14,6 +14,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
+from restaurant_agent.menu_retriever import (
+    explicit_dietary_tag_query,
+    is_explicit_taco_category_query,
+)
 
 # ── Response model ──────────────────────────────────────────────────────
 
@@ -80,6 +84,21 @@ _NEEDS_CONFIRMATION_MODS = {
     "extra avocado",
 }
 
+_ADD_REQUEST_PREFIXES = [
+    r"add",
+    r"order",
+    r"could i get",
+    r"can i get",
+    r"can i have",
+    r"i would like",
+    r"i'd like",
+    r"let me get",
+    r"give me",
+    r"i'll have",
+    r"we'll have",
+    r"i want",
+]
+
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -138,6 +157,77 @@ def _extract_customer_name(text: str) -> Optional[str]:
     return None
 
 
+def _normalize_text(text: str) -> str:
+    """Lowercase and collapse punctuation/whitespace for intent matching."""
+    text = text.replace("’", "'")
+    normalized = re.sub(r"[^\w\s']", " ", text.lower())
+    return " ".join(normalized.split())
+
+
+def _matches_any_pattern(text: str, patterns: List[str]) -> bool:
+    return any(re.fullmatch(pattern, text) for pattern in patterns)
+
+
+def _is_conversation_done(normalized: str) -> bool:
+    done_patterns = [
+        r"no",
+        r"no thanks",
+        r"that's it",
+        r"that is it",
+        r"that's everything",
+        r"that is everything",
+        r"i'm done",
+        r"im done",
+        r"done",
+        r"nothing else",
+    ]
+    return _matches_any_pattern(normalized, done_patterns)
+
+
+def _is_confirm_request(normalized: str) -> bool:
+    confirm_patterns = [
+        r"yes",
+        r"yes confirm",
+        r"yes confirm the order",
+        r"confirm",
+        r"confirm the order",
+        r"yes place the order",
+        r"place the order",
+        r"go ahead and confirm",
+    ]
+    return _matches_any_pattern(normalized, confirm_patterns)
+
+
+def _has_add_request_prefix(normalized: str) -> bool:
+    return any(
+        re.search(rf"\b{prefix}\b", normalized) for prefix in _ADD_REQUEST_PREFIXES
+    )
+
+
+def _looks_like_add_request(normalized: str, item_id: Optional[str]) -> bool:
+    if _has_add_request_prefix(normalized):
+        return True
+
+    return bool(
+        item_id and re.match(r"^(?:\d+|one|two|three|four|five|a|an)\b", normalized)
+    )
+
+
+def _is_broad_add_request(normalized: str) -> bool:
+    broad_add_patterns = [
+        r"give me all of it",
+        r"give me all of them",
+        r"i want all of it",
+        r"i want all of them",
+        r"i want every single item",
+        r"i'll take all of them",
+        r"add all of them",
+        r"add all of it",
+        r"one of each",
+    ]
+    return _matches_any_pattern(normalized, broad_add_patterns)
+
+
 # ── Main entry point ────────────────────────────────────────────────────
 
 
@@ -154,6 +244,7 @@ def parse_fallback_intent(
     """
     text = utterance.strip()
     lower = text.lower()
+    normalized = _normalize_text(text)
     ctx = session_context or {}
 
     # ── Payment refusal ─────────────────────────────────────────────
@@ -225,18 +316,7 @@ def parse_fallback_intent(
         )
 
     # ── Confirm order ───────────────────────────────────────────────
-    confirm_patterns = [
-        r"\bconfirm\b",
-        r"\bthat'?s correct\b",
-        r"\byes,? (confirm|place|submit)\b",
-        r"\bplace (the |my )?order\b",
-        r"\bsubmit\b",
-        r"\bsounds good\b",
-        r"\bthat'?s right\b",
-        r"\byep\b",
-        r"\byeah\b",
-    ]
-    if any(re.search(p, lower) for p in confirm_patterns):
+    if _is_confirm_request(normalized):
         session_id = ctx.get("session_id")
         if session_id:
             return ParsedFallbackIntent(
@@ -246,6 +326,16 @@ def parse_fallback_intent(
                 confidence=0.8,
                 safe_to_execute=True,
             )
+
+    # ── Conversational wrap-up / done ───────────────────────────────
+    if _is_conversation_done(normalized):
+        return ParsedFallbackIntent(
+            intent="conversation_done",
+            tool_name=None,
+            arguments={},
+            confidence=0.8,
+            safe_to_execute=True,
+        )
 
     # ── Customer name capture ───────────────────────────────────────
     name = _extract_customer_name(text)
@@ -329,12 +419,20 @@ def parse_fallback_intent(
             safe_to_execute=False,
         )
 
+    # ── Broad add request ───────────────────────────────────────────
+    if _is_broad_add_request(normalized):
+        return ParsedFallbackIntent(
+            intent="broad_add_request",
+            tool_name=None,
+            arguments={},
+            confidence=0.6,
+            clarification_question="Do you mean one of each item I just listed?",
+            safe_to_execute=False,
+        )
+
     # ── Add item ────────────────────────────────────────────────────
-    add_triggers = [
-        r"\b(add|i'?d like|i want|can i (get|have)|give me|order|let me get|i'?ll have)\b"
-    ]
-    if any(re.search(p, lower) for p in add_triggers):
-        item_id = _match_item(lower)
+    item_id = _match_item(lower)
+    if _looks_like_add_request(normalized, item_id):
         if item_id:
             quantity = _extract_quantity(lower)
             special_instructions = _extract_special_instructions(lower)
@@ -385,6 +483,28 @@ def parse_fallback_intent(
             )
 
     # ── Menu search ─────────────────────────────────────────────────
+    if is_explicit_taco_category_query(text):
+        return ParsedFallbackIntent(
+            intent="search_menu",
+            tool_name="search_menu",
+            arguments={"query": text, "top_k": 5},
+            confidence=0.8,
+            safe_to_execute=True,
+        )
+
+    dietary_tag = explicit_dietary_tag_query(text)
+    if dietary_tag and any(
+        keyword in normalized
+        for keyword in ["what", "kind", "items", "options", "have", "show", "menu"]
+    ):
+        return ParsedFallbackIntent(
+            intent="search_menu",
+            tool_name="search_menu",
+            arguments={"query": text, "top_k": 8},
+            confidence=0.8,
+            safe_to_execute=True,
+        )
+
     search_triggers = [
         r"\b(what|which|do you have|show me|menu|options|available|recommend)\b"
     ]

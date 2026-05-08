@@ -31,6 +31,7 @@ def test_us_07_summary_and_total():
 
     assert res.intent == "compute_total"
     assert "total" in res.agent_text.lower()
+    assert "would you like anything else" in res.agent_text.lower()
 
     # Readback
     req2 = AgentTurnRequest(

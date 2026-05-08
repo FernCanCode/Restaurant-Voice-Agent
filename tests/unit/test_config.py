@@ -1,4 +1,13 @@
+import pytest
+
 from restaurant_agent.config import Settings
+
+
+@pytest.fixture(autouse=True)
+def _clear_optional_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "")
 
 
 def test_settings_load_with_defaults():

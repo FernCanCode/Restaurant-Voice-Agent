@@ -85,7 +85,12 @@ def build_rag_index(
         # type: ignore
         from sentence_transformers import SentenceTransformer
 
-        model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        # Build only from a locally available embedding model. Reproduction can
+        # pre-download it explicitly via `make download-models`.
+        model = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            local_files_only=True,
+        )
         texts = [chunk["retrieval_text"] for chunk in chunks]
         embeddings = model.encode(texts, show_progress_bar=False)
 

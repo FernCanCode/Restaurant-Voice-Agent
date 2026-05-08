@@ -1,5 +1,16 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_PLACEHOLDER_SECRETS = {
+    "",
+    "replace_me",
+    "your_key_here",
+    "sk-placeholder",
+    "change_me",
+}
 
 
 class Settings(BaseSettings):
@@ -31,6 +42,23 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
+
+    @field_validator(
+        "anthropic_api_key",
+        "twilio_account_sid",
+        "twilio_auth_token",
+        "twilio_phone_number",
+        "twilio_webhook_base_url",
+        mode="before",
+    )
+    @classmethod
+    def normalize_placeholder_secrets(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        if normalized.lower() in _PLACEHOLDER_SECRETS:
+            return None
+        return normalized
 
 
 def get_settings() -> Settings:

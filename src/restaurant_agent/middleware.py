@@ -1,21 +1,35 @@
 import uuid
-from typing import Callable, Awaitable
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from typing import Any, Awaitable, Callable
 
 
-class RequestIDMiddleware(BaseHTTPMiddleware):
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        request_id = request.headers.get("X-Request-ID")
-        if not request_id:
-            request_id = str(uuid.uuid4())
+class RequestIDMiddleware:
+    def __init__(self, app: Callable[..., Awaitable[Any]]) -> None:
+        self.app = app
 
-        request.state.request_id = request_id
+    async def __call__(
+        self,
+        scope: dict[str, Any],
+        receive: Callable[[], Awaitable[dict[str, Any]]],
+        send: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        response: Response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
+        headers = {
+            key.decode("latin-1").lower(): value.decode("latin-1")
+            for key, value in scope.get("headers", [])
+        }
+        request_id = headers.get("x-request-id") or str(uuid.uuid4())
 
-        return response
+        state = scope.setdefault("state", {})
+        state["request_id"] = request_id
+
+        async def send_with_request_id(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                response_headers = list(message.get("headers", []))
+                response_headers.append((b"x-request-id", request_id.encode("latin-1")))
+                message["headers"] = response_headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_request_id)

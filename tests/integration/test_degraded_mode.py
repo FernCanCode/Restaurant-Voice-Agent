@@ -21,7 +21,7 @@ from restaurant_agent.llm_client import (
 @pytest.fixture(autouse=True)
 def _clear_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure no real key is present during these tests."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
 
 
 def test_is_llm_configured_false_when_no_key():

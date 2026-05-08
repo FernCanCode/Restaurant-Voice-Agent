@@ -1,11 +1,103 @@
+import re
 from pathlib import Path
-from typing import List, Union, Dict
+from typing import Dict, List, Union
 
 import numpy as np
 from rapidfuzz import fuzz, process
 
 from restaurant_agent.rag_index import load_menu_chunks, load_rag_metadata
 from restaurant_agent.schemas import CanonicalMenu, MenuSearchResult
+
+
+_GENERIC_CATEGORY_WORDS = {
+    "what",
+    "which",
+    "do",
+    "you",
+    "have",
+    "show",
+    "me",
+    "options",
+    "option",
+    "available",
+    "are",
+    "is",
+    "the",
+    "menu",
+    "please",
+}
+
+_DIETARY_TAGS = {"vegetarian", "vegan"}
+
+
+def _tokenize_query(query: str) -> List[str]:
+    return re.findall(r"[a-z]+", query.lower())
+
+
+def is_explicit_taco_category_query(query: str) -> bool:
+    tokens = _tokenize_query(query)
+    if not tokens or not any(token in {"taco", "tacos"} for token in tokens):
+        return False
+
+    filtered = [token for token in tokens if token not in _GENERIC_CATEGORY_WORDS]
+    return bool(filtered) and set(filtered).issubset({"taco", "tacos"})
+
+
+def _filter_taco_category(menu: CanonicalMenu) -> List[MenuSearchResult]:
+    results: List[MenuSearchResult] = []
+    for item in menu.items:
+        if not item.available:
+            continue
+
+        category = item.category.strip().lower()
+        item_name = item.name.strip().lower()
+        if category == "tacos" or "taco" in item_name:
+            results.append(
+                MenuSearchResult(
+                    item_id=item.id,
+                    name=item.name,
+                    category=item.category,
+                    description=item.description,
+                    price=item.base_price,
+                    score=0.95,
+                    source_text=item.source_text,
+                )
+            )
+
+    return sorted(results, key=lambda item: item.name)
+
+
+def explicit_dietary_tag_query(query: str) -> str | None:
+    tokens = _tokenize_query(query)
+    for dietary_tag in sorted(_DIETARY_TAGS):
+        if dietary_tag in tokens:
+            return dietary_tag
+    return None
+
+
+def _filter_dietary_tag(
+    menu: CanonicalMenu, dietary_tag: str
+) -> List[MenuSearchResult]:
+    normalized_tag = dietary_tag.strip().lower()
+    results: List[MenuSearchResult] = []
+    for item in menu.items:
+        if not item.available:
+            continue
+
+        if any(normalized_tag == tag.strip().lower() for tag in item.dietary_tags):
+            results.append(
+                MenuSearchResult(
+                    item_id=item.id,
+                    name=item.name,
+                    category=item.category,
+                    description=item.description,
+                    price=item.base_price,
+                    score=0.9,
+                    source_text=item.source_text,
+                )
+            )
+
+    return sorted(results, key=lambda item: item.name)
 
 
 def structured_filter_menu(query: str, menu: CanonicalMenu) -> List[MenuSearchResult]:
@@ -81,7 +173,12 @@ def vector_search_menu(
         # type: ignore
         from sentence_transformers import SentenceTransformer
 
-        model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        # Never trigger a model download during request handling. If the model
+        # is not already present locally, degrade to lexical/structured search.
+        model = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            local_files_only=True,
+        )
         query_emb = model.encode(query, show_progress_bar=False)
 
         doc_embs = np.load(embeddings_path)
@@ -126,6 +223,13 @@ def search_menu(
     index_dir: Union[str, Path],
     top_k: int = 5,
 ) -> List[MenuSearchResult]:
+    if is_explicit_taco_category_query(query):
+        return _filter_taco_category(menu)[:top_k]
+
+    dietary_tag = explicit_dietary_tag_query(query)
+    if dietary_tag:
+        return _filter_dietary_tag(menu, dietary_tag)[:top_k]
+
     meta = load_rag_metadata(index_dir)
     degraded = meta.get("degraded_mode", True)
 

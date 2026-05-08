@@ -20,6 +20,36 @@ def sample_menu():
         source_type="html",
     )
     item2 = MenuItem(
+        id="crispy_fish_tacos",
+        name="Crispy Fish Tacos",
+        category="Tacos",
+        description="crispy fish tacos",
+        base_price=6.5,
+        available=True,
+        source_text="",
+        source_type="html",
+    )
+    item3 = MenuItem(
+        id="street_corn",
+        name="Street Corn",
+        category="Sides",
+        description="corn with cotija",
+        base_price=4.0,
+        available=True,
+        source_text="",
+        source_type="html",
+    )
+    item4 = MenuItem(
+        id="black_bean_bowl",
+        name="Black Bean Bowl",
+        category="Bowls",
+        description="bean bowl",
+        base_price=9.0,
+        available=True,
+        source_text="",
+        source_type="html",
+    )
+    item5 = MenuItem(
         id="lemonade",
         name="Lemonade",
         category="Drinks",
@@ -30,13 +60,25 @@ def sample_menu():
         source_type="html",
         dietary_tags=["vegetarian"],
     )
-    return CanonicalMenu(restaurant=meta, items=[item1, item2])
+    return CanonicalMenu(restaurant=meta, items=[item1, item2, item3, item4, item5])
 
 
 def test_search_menu_tacos(sample_menu, tmp_path):
     results = search_menu("tacos", sample_menu, tmp_path)
-    assert len(results) > 0
-    assert results[0].item_id == "chicken_tacos"
+    item_ids = {result.item_id for result in results}
+    assert "chicken_tacos" in item_ids
+    assert "crispy_fish_tacos" in item_ids
+    assert "street_corn" not in item_ids
+    assert "black_bean_bowl" not in item_ids
+
+
+def test_search_menu_explicit_taco_question_excludes_sides(sample_menu, tmp_path):
+    results = search_menu("What tacos do you have?", sample_menu, tmp_path)
+    item_ids = {result.item_id for result in results}
+    assert "chicken_tacos" in item_ids
+    assert "crispy_fish_tacos" in item_ids
+    assert "street_corn" not in item_ids
+    assert "black_bean_bowl" not in item_ids
 
 
 def test_search_menu_chicken_taco(sample_menu, tmp_path):

@@ -22,3 +22,5 @@ def test_us_02_menu_question_rag():
     assert res.intent == "search_menu"
     assert any(tc.tool_name == "search_menu" for tc in res.tool_calls)
     assert len(res.order.items) == 0
+    assert "black bean bowl" not in res.agent_text.lower()
+    assert "street corn" not in res.agent_text.lower()

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from restaurant_agent.schemas import Channel, DialogueMode, DialogueState, DialogueTurn
 
@@ -39,6 +39,38 @@ def get_session(session_id: str) -> Optional[DialogueState]:
 def update_session(state: DialogueState) -> DialogueState:
     _SESSIONS[state.session_id] = state
     return state
+
+
+def set_pending_action(
+    session_id: str,
+    pending_action: str,
+    pending_question: Optional[str] = None,
+) -> DialogueState:
+    state = get_session(session_id)
+    if not state:
+        raise ValueError(f"Session not found: {session_id}")
+    state.pending_action = pending_action
+    state.pending_question = pending_question
+    return update_session(state)
+
+
+def clear_pending_action(session_id: str) -> DialogueState:
+    state = get_session(session_id)
+    if not state:
+        raise ValueError(f"Session not found: {session_id}")
+    state.pending_action = None
+    state.pending_question = None
+    return update_session(state)
+
+
+def set_last_retrieved_candidates(
+    session_id: str, candidates: List[Dict[str, Any]]
+) -> DialogueState:
+    state = get_session(session_id)
+    if not state:
+        raise ValueError(f"Session not found: {session_id}")
+    state.last_retrieved_candidates = candidates
+    return update_session(state)
 
 
 def append_turn(
