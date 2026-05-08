@@ -12,6 +12,16 @@ def _clear_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_us_07_summary_and_total():
     session = start_session()
 
+    price_req = AgentTurnRequest(
+        session_id=session.session_id,
+        utterance="how much is the veggie quesadilla",
+        channel=Channel.browser,
+    )
+    price_res = process_turn(price_req)
+    assert price_res.intent == "price_lookup"
+    assert "9.00" in price_res.agent_text
+    assert "unavailable" not in price_res.agent_text.lower()
+
     # Add an item first
     process_turn(
         AgentTurnRequest(

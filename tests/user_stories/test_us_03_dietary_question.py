@@ -48,7 +48,7 @@ def test_us_03_vegetarian_broad_add_requires_confirmation():
     broad_add_response = process_turn(
         AgentTurnRequest(
             session_id=session.session_id,
-            utterance="give me all of it",
+            utterance="give me all of that",
             channel=Channel.browser,
         )
     )
@@ -68,3 +68,26 @@ def test_us_03_vegetarian_broad_add_requires_confirmation():
     assert "black_bean_bowl" in item_ids
     assert "veggie_quesadilla" in item_ids
     assert "would you like anything else" in confirmed_response.agent_text.lower()
+
+
+@pytest.mark.user_story("US-03")
+def test_us_03_vegetarian_broad_add_those_variant_requires_confirmation():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="what kind of vegetarian items do you have",
+            channel=Channel.browser,
+        )
+    )
+
+    broad_add_response = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="give me all of those",
+            channel=Channel.browser,
+        )
+    )
+    assert len(broad_add_response.order.items) == 0
+    assert "just to confirm" in broad_add_response.agent_text.lower()

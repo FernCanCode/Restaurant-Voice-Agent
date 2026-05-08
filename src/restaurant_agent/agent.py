@@ -11,7 +11,9 @@ from restaurant_agent.llm_client import (
     generate_response_text,
     propose_tool_route,
 )
-from restaurant_agent.fallback_parser import parse_fallback_intent
+from restaurant_agent.fallback_parser import ParsedFallbackIntent, parse_fallback_intent
+from restaurant_agent.config import get_settings
+from restaurant_agent.menu_loader import get_item_by_id, load_menu
 from restaurant_agent.menu_retriever import (
     explicit_dietary_tag_query,
     is_explicit_taco_category_query,
@@ -55,13 +57,19 @@ _NUMBER_WORDS = {
 
 _BROAD_ADD_PATTERNS = {
     "give me all of it",
+    "give me all of that",
+    "give me all of those",
     "give me all of them",
     "i want all of it",
+    "i want all of that",
+    "i want all of those",
     "i want all of them",
     "i want every single item",
     "i'll take all of them",
+    "i'll take all of that",
     "add all of them",
     "add all of it",
+    "add all of that",
     "one of each",
 }
 
@@ -71,6 +79,10 @@ _PENDING_YES_PATTERNS = {
     "yes that's right",
     "yes thats right",
     "confirm",
+    "confirm order",
+    "confirm my order",
+    "yes confirm",
+    "yes, confirm",
 }
 
 _PENDING_NO_PATTERNS = {
@@ -325,6 +337,58 @@ def _handle_broad_add_request(session_id: str) -> str:
     return question
 
 
+def _handle_set_customer_name(session_id: str, proposal: ParsedFallbackIntent) -> str:
+    name = proposal.arguments.get("customer_name")
+    if not name:
+        return "I didn't quite catch your name."
+
+    set_customer_name(session_id, str(name))
+    return proposal.response_text or (
+        f"Got it, the order is under {name}. "
+        "When you're ready, I can review the order and confirm it."
+    )
+
+
+def _handle_price_lookup(proposal: ParsedFallbackIntent) -> str:
+    item_id = str(proposal.arguments.get("item_id", "")).strip()
+    if not item_id:
+        return "Which item would you like me to price?"
+
+    settings = get_settings()
+    menu = load_menu(settings.menu_data_path)
+    item = get_item_by_id(menu, item_id)
+    if not item:
+        return "I couldn't find that item on the menu."
+
+    return f"{item.name} is {format_money(item.base_price, menu.restaurant.currency)}."
+
+
+def _deterministic_pre_route(
+    utterance: str,
+    session_context: Dict[str, Any],
+) -> Optional[ParsedFallbackIntent]:
+    proposal = parse_fallback_intent(
+        utterance=utterance, session_context=session_context
+    )
+
+    if proposal.intent in {
+        "conversation_done",
+        "confirm_order",
+        "broad_add_request",
+        "price_lookup",
+        "set_customer_name",
+    }:
+        return proposal
+
+    if proposal.intent == "search_menu" and (
+        is_explicit_taco_category_query(utterance)
+        or explicit_dietary_tag_query(utterance) is not None
+    ):
+        return proposal
+
+    return None
+
+
 def _handle_pending_add_all(
     request_session_id: str, request_id: Optional[str]
 ) -> tuple[str, list[ToolCallSummary]]:
@@ -443,7 +507,7 @@ def process_turn(
     }
 
     degraded = False
-    proposal: Any
+    proposal: Any = None
     tool_calls: list[ToolCallSummary] = []
     response_text = ""
     intent_override: Optional[str] = None
@@ -462,24 +526,43 @@ def process_turn(
                 "Please say yes to add one of each item I just listed, or no to keep the order as it is."
             )
             intent_override = "confirm_add_all"
-    elif _is_broad_add_request(normalized_utterance):
-        response_text = _handle_broad_add_request(request.session_id)
-        intent_override = "broad_add_request"
-
     if intent_override is None:
-        try:
-            proposal = propose_tool_route(
-                utterance=request.utterance,
-                session_context=session_context,
-                request_id=request_id,
-            )
-        except LLMUnavailableError:
-            proposal = parse_fallback_intent(
-                utterance=request.utterance, session_context=session_context
-            )
-            degraded = True
-            session.degraded_llm = True
-            update_session(session)
+        deterministic_proposal = _deterministic_pre_route(
+            request.utterance, session_context
+        )
+        if deterministic_proposal is not None:
+            if deterministic_proposal.intent == "conversation_done":
+                response_text = _handle_conversation_done(request.session_id)
+                intent_override = "conversation_done"
+            elif deterministic_proposal.intent == "broad_add_request":
+                response_text = _handle_broad_add_request(request.session_id)
+                intent_override = "broad_add_request"
+            elif deterministic_proposal.intent == "set_customer_name":
+                response_text = _handle_set_customer_name(
+                    request.session_id, deterministic_proposal
+                )
+                intent_override = "set_customer_name"
+            elif deterministic_proposal.intent == "price_lookup":
+                response_text = _handle_price_lookup(deterministic_proposal)
+                intent_override = "price_lookup"
+            else:
+                proposal = deterministic_proposal
+
+    if not response_text and intent_override is None:
+        if proposal is None:
+            try:
+                proposal = propose_tool_route(
+                    utterance=request.utterance,
+                    session_context=session_context,
+                    request_id=request_id,
+                )
+            except LLMUnavailableError:
+                proposal = parse_fallback_intent(
+                    utterance=request.utterance, session_context=session_context
+                )
+                degraded = True
+                session.degraded_llm = True
+                update_session(session)
 
         if proposal.intent == "conversation_done":
             response_text = _handle_conversation_done(request.session_id)
@@ -488,15 +571,10 @@ def process_turn(
             response_text = _handle_broad_add_request(request.session_id)
 
         elif proposal.intent == "set_customer_name":
-            name = proposal.arguments.get("customer_name")
-            if name:
-                set_customer_name(request.session_id, name)
-                response_text = proposal.response_text or (
-                    f"Got it, the order is under {name}. "
-                    "When you're ready, I can review the order and confirm it."
-                )
-            else:
-                response_text = "I didn't quite catch your name."
+            response_text = _handle_set_customer_name(request.session_id, proposal)
+
+        elif proposal.intent == "price_lookup":
+            response_text = _handle_price_lookup(proposal)
 
         elif not getattr(proposal, "safe_to_execute", True):
             response_text = (

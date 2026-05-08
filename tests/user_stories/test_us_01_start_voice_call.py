@@ -39,6 +39,11 @@ def test_us_01_start_voice_call():
     assert (
         "Browser speech recognition does not expose a sensitivity control" in html_text
     )
+    assert "Processing speech..." in html_text
+    assert "I only caught part of that. Please try again." in html_text
+    assert "wait until the status says" in html_text
+    assert "isListening" in html_text
+    assert "isSpeaking" in html_text
     assert "cleanTextForSpeech" in html_text
 
     # 2. POST /api/browser/start-call returns greeting, empty order, etc

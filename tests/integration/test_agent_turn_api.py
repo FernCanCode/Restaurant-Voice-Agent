@@ -134,7 +134,7 @@ def test_broad_add_requires_confirmation_before_mutation() -> None:
         _request("req-broad-add-ask"),
         AgentTurnRequest(
             session_id=session_id,
-            utterance="give me all of it",
+            utterance="give me all of that",
             channel="browser",
             metadata={},
         ),
@@ -191,7 +191,7 @@ def test_broad_add_decline_does_not_change_order() -> None:
         _request("req-broad-decline-ask"),
         AgentTurnRequest(
             session_id=session_id,
-            utterance="give me all of it",
+            utterance="give me all of those",
             channel="browser",
             metadata={},
         ),
@@ -280,6 +280,48 @@ def test_turn_total_request_returns_total() -> None:
     data = response.model_dump()
     assert data["intent"] == "compute_total"
     assert "total" in data["agent_text"].lower()
+
+
+def test_price_lookup_returns_canonical_item_price() -> None:
+    sess = api_create_session(
+        _request("req-price-session"),
+        CreateSessionRequest(channel="browser"),
+    ).model_dump()
+    session_id = sess["session_id"]
+
+    response = api_turn(
+        _request("req-price-turn"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="how much is the veggie quesadilla",
+            channel="browser",
+            metadata={},
+        ),
+    ).model_dump()
+    assert response["intent"] == "price_lookup"
+    assert "9.00" in response["agent_text"]
+    assert "unavailable" not in response["agent_text"].lower()
+    assert len(response["order"]["items"]) == 0
+
+
+def test_price_lookup_works_for_lemonade() -> None:
+    sess = api_create_session(
+        _request("req-price-drink-session"),
+        CreateSessionRequest(channel="browser"),
+    ).model_dump()
+    session_id = sess["session_id"]
+
+    response = api_turn(
+        _request("req-price-drink-turn"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="how much is lemonade",
+            channel="browser",
+            metadata={},
+        ),
+    ).model_dump()
+    assert response["intent"] == "price_lookup"
+    assert "3.00" in response["agent_text"]
 
 
 def test_thats_it_asks_for_name_then_reads_back_then_confirms() -> None:
@@ -371,6 +413,127 @@ def test_no_does_not_confirm_empty_order() -> None:
     ).model_dump()
     assert response["order"]["status"] == "active"
     assert "what would you like to order" in response["agent_text"].lower()
+
+
+def test_no_thats_all_triggers_wrap_up() -> None:
+    sess = api_create_session(
+        _request("req-no-thats-all-session"),
+        CreateSessionRequest(channel="browser"),
+    ).model_dump()
+    session_id = sess["session_id"]
+
+    api_turn(
+        _request("req-no-thats-all-add"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="Add one chicken taco",
+            channel="browser",
+            metadata={},
+        ),
+    )
+
+    response = api_turn(
+        _request("req-no-thats-all-turn"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="no that's all",
+            channel="browser",
+            metadata={},
+        ),
+    ).model_dump()
+    assert "what name should i put the order under" in response["agent_text"].lower()
+
+
+def test_confirm_order_explains_missing_requirement() -> None:
+    sess = api_create_session(
+        _request("req-confirm-missing-session"),
+        CreateSessionRequest(channel="browser"),
+    ).model_dump()
+    session_id = sess["session_id"]
+
+    api_turn(
+        _request("req-confirm-missing-add"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="Add one chicken taco",
+            channel="browser",
+            metadata={},
+        ),
+    )
+
+    response = api_turn(
+        _request("req-confirm-missing-turn"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="confirm order",
+            channel="browser",
+            metadata={},
+        ),
+    ).model_dump()
+    assert "what name should i put the order under" in response["agent_text"].lower()
+    assert "which item" not in response["agent_text"].lower()
+
+
+def test_confirm_order_succeeds_after_name_and_readback() -> None:
+    sess = api_create_session(
+        _request("req-confirm-ready-session"),
+        CreateSessionRequest(channel="browser"),
+    ).model_dump()
+    session_id = sess["session_id"]
+
+    api_turn(
+        _request("req-confirm-ready-add"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="Add one chicken taco",
+            channel="browser",
+            metadata={},
+        ),
+    )
+    api_turn(
+        _request("req-confirm-ready-name"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="Put the order under Fernando",
+            channel="browser",
+            metadata={},
+        ),
+    )
+    confirm_before_readback = api_turn(
+        _request("req-confirm-before-readback"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="confirm order",
+            channel="browser",
+            metadata={},
+        ),
+    ).model_dump()
+    assert (
+        "would you like me to confirm this order"
+        in confirm_before_readback["agent_text"].lower()
+    )
+
+    api_turn(
+        _request("req-confirm-ready-readback"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="that's all",
+            channel="browser",
+            metadata={},
+        ),
+    )
+
+    response = api_turn(
+        _request("req-confirm-ready-confirm"),
+        AgentTurnRequest(
+            session_id=session_id,
+            utterance="confirm order",
+            channel="browser",
+            metadata={},
+        ),
+    ).model_dump()
+    assert response["order"]["status"] == "confirmed"
+    assert response["order"]["confirmation_id"] is not None
 
 
 def test_missing_session_returns_404() -> None:

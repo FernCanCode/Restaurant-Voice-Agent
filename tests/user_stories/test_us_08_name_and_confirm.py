@@ -64,9 +64,40 @@ def test_us_08_name_and_confirm():
     res_conf = process_turn(
         AgentTurnRequest(
             session_id=session.session_id,
-            utterance="Yes, confirm",
+            utterance="confirm order",
             channel=Channel.browser,
         )
     )
     assert res_conf.order.status.value == "confirmed"
     assert res_conf.order.confirmation_id is not None
+
+
+@pytest.mark.user_story("US-08")
+def test_us_08_no_thats_all_and_confirm_requirements():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Add one chicken taco",
+            channel=Channel.browser,
+        )
+    )
+
+    res_done = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="no that's all",
+            channel=Channel.browser,
+        )
+    )
+    assert "what name should i put the order under" in res_done.agent_text.lower()
+
+    res_confirm = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="confirm order",
+            channel=Channel.browser,
+        )
+    )
+    assert "what name should i put the order under" in res_confirm.agent_text.lower()

@@ -331,6 +331,9 @@ def render_browser_ui() -> str:
                 <div class="voice-help">
                     Voice input works best in Chrome or Chromium. If the microphone is blocked, open this page directly at localhost instead of an embedded preview and allow microphone access in site settings.
                 </div>
+                <div class="voice-help">
+                    If Chrome misses the first attempt, wait until the status says “Listening... speak now.” before speaking.
+                </div>
                 <div class="voice-settings">
                     <label class="checkbox-row" for="auto-listen-toggle">
                         <input type="checkbox" id="auto-listen-toggle" onchange="handleAutoListenChange()">
@@ -409,7 +412,10 @@ def render_browser_ui() -> str:
     <script>
         let sessionId = null;
         let isListening = false;
+        let isSpeaking = false;
+        let speechToken = 0;
         let recognitionStarting = false;
+        let autoListenTimer = null;
         let recognition = null;
         let synthesis = window.speechSynthesis;
         let availableVoices = [];
@@ -457,6 +463,48 @@ def render_browser_ui() -> str:
 
         function updateVoiceLiveStatus(message) {
             document.getElementById('voice-live-status').textContent = message;
+        }
+
+        function clearAutoListenTimer() {
+            if (autoListenTimer) {
+                window.clearTimeout(autoListenTimer);
+                autoListenTimer = null;
+            }
+        }
+
+        function normalizeCommandText(text) {
+            return String(text || '')
+                .toLowerCase()
+                .replace(/[^\\w\\s']/g, ' ')
+                .replace(/\\s+/g, ' ')
+                .trim();
+        }
+
+        function shouldSubmitTranscript(text) {
+            const normalized = normalizeCommandText(text);
+            if (!normalized) {
+                return false;
+            }
+
+            const shortCommands = new Set([
+                'yes',
+                'no',
+                'confirm',
+                'done',
+                "that's all",
+                'that is all',
+                "that's it",
+                'that is it',
+            ]);
+            if (shortCommands.has(normalized)) {
+                return true;
+            }
+
+            const words = normalized
+                .split(' ')
+                .map((word) => word.trim())
+                .filter((word) => word.length > 1 || /^\\d+$/.test(word));
+            return words.length >= 2;
         }
 
         function handleAutoListenChange() {
@@ -571,6 +619,14 @@ def render_browser_ui() -> str:
                 return;
             }
 
+            if (isSpeaking && synthesis) {
+                speechToken += 1;
+                isSpeaking = false;
+                synthesis.cancel();
+                window.setTimeout(() => startListening(reason), 450);
+                return;
+            }
+
             recognitionStarting = true;
             activeInputMode = 'voice';
             updateVoiceLiveStatus('Listening... speak now.');
@@ -580,6 +636,7 @@ def render_browser_ui() -> str:
             } catch (error) {
                 console.error(error);
                 recognitionStarting = false;
+                isListening = false;
                 appendMessage('system', 'Unable to start speech recognition. You can still use typed fallback for debugging/accessibility.');
                 updateVoiceLiveStatus('Unable to start speech recognition. You can still use typed fallback.');
                 maybeFocusFallbackInput();
@@ -587,11 +644,14 @@ def render_browser_ui() -> str:
         }
 
         function maybeStartAutoListen() {
-            if (!autoListenEnabled || !recognition || isConversationComplete()) {
+            clearAutoListenTimer();
+            if (!autoListenEnabled || !recognition || isConversationComplete() || isSpeaking) {
                 maybeFocusFallbackInput();
                 return;
             }
-            startListening('auto');
+            autoListenTimer = window.setTimeout(() => {
+                startListening('auto');
+            }, 450);
         }
 
         // Initialize Web Speech API
@@ -636,13 +696,19 @@ def render_browser_ui() -> str:
                 }
 
                 if (finalText) {
-                    updateVoiceLiveStatus(`Heard: ${finalText}`);
-                    sendTurn(finalText);
+                    const cleanedFinalText = finalText.trim();
+                    updateVoiceLiveStatus(`Heard: ${cleanedFinalText}`);
+                    if (!shouldSubmitTranscript(cleanedFinalText)) {
+                        appendMessage('system', 'I only caught part of that. Please try again.');
+                        updateVoiceLiveStatus('I only caught part of that. Please try again.');
+                        return;
+                    }
+                    sendTurn(cleanedFinalText);
                 }
             };
 
             recognition.onspeechend = function() {
-                updateVoiceLiveStatus('Processing what I heard...');
+                updateVoiceLiveStatus('Processing speech...');
             };
 
             recognition.onerror = function(event) {
@@ -652,7 +718,7 @@ def render_browser_ui() -> str:
                     appendMessage('system', microphonePermissionBlockedMessage);
                     updateVoiceLiveStatus('Microphone access was blocked.');
                 } else if (event.error === 'no-speech') {
-                    appendMessage('system', 'No speech detected. Try speaking closer to the microphone or check your system input volume.');
+                    appendMessage('system', 'No speech detected. Try again or use typed fallback.');
                     updateVoiceLiveStatus('No speech detected. Try speaking closer to the microphone or check your system input volume.');
                 } else if (event.error === 'audio-capture') {
                     appendMessage('system', 'No microphone was found. Check your system microphone connection and browser input device.');
@@ -698,8 +764,15 @@ def render_browser_ui() -> str:
             if (isListening) {
                 recognition.stop();
             } else {
-                // Cancel any ongoing speech synthesis before listening
-                if (synthesis) synthesis.cancel();
+                clearAutoListenTimer();
+                if (isSpeaking && synthesis) {
+                    updateVoiceLiveStatus('Preparing microphone...');
+                    speechToken += 1;
+                    isSpeaking = false;
+                    synthesis.cancel();
+                    window.setTimeout(() => startListening('manual'), 450);
+                    return;
+                }
                 startListening('manual');
             }
         }
@@ -732,6 +805,10 @@ def render_browser_ui() -> str:
                 return;
             }
 
+            clearAutoListenTimer();
+            speechToken += 1;
+            const currentSpeechToken = speechToken;
+            isSpeaking = true;
             synthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(spokenText);
             const selectedVoice = availableVoices.find((voice) => voice.name === selectedVoiceName) || pickPreferredVoice(getEnglishVoices());
@@ -743,6 +820,10 @@ def render_browser_ui() -> str:
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
             utterance.onend = function() {
+                if (currentSpeechToken !== speechToken) {
+                    return;
+                }
+                isSpeaking = false;
                 if (autoListenAfterSpeech) {
                     maybeStartAutoListen();
                 } else {
@@ -750,6 +831,10 @@ def render_browser_ui() -> str:
                 }
             };
             utterance.onerror = function() {
+                if (currentSpeechToken !== speechToken) {
+                    return;
+                }
+                isSpeaking = false;
                 if (autoListenAfterSpeech) {
                     maybeStartAutoListen();
                 } else {
@@ -775,6 +860,8 @@ def render_browser_ui() -> str:
             document.getElementById('btn-start').textContent = 'Restart Order';
             if (isConversationComplete()) {
                 updateConnectionStatus('Conversation complete', currentOrderStatus);
+                updateVoiceLiveStatus('Conversation complete.');
+                clearAutoListenTimer();
                 if (recognition && (isListening || recognitionStarting)) {
                     recognition.stop();
                 }
@@ -880,9 +967,10 @@ def render_browser_ui() -> str:
             if (recognition && (isListening || recognitionStarting)) {
                 recognition.stop();
             }
+            clearAutoListenTimer();
             appendMessage('user', text);
             updateConnectionStatus('Thinking...');
-            updateVoiceLiveStatus('Processing your request...');
+            updateVoiceLiveStatus('Processing speech...');
 
             try {
                 const response = await fetch('/api/browser/voice-turn', {

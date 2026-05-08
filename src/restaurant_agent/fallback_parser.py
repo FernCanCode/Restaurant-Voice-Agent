@@ -172,14 +172,26 @@ def _is_conversation_done(normalized: str) -> bool:
     done_patterns = [
         r"no",
         r"no thanks",
+        r"that's all",
+        r"that is all",
         r"that's it",
         r"that is it",
+        r"no that's all",
+        r"no that is all",
+        r"no that's it",
+        r"no that is it",
+        r"no thanks that's all",
+        r"no thanks that's it",
         r"that's everything",
         r"that is everything",
         r"i'm done",
         r"im done",
         r"done",
+        r"all done",
+        r"that'll be all",
+        r"that will be all",
         r"nothing else",
+        r"no nothing else",
     ]
     return _matches_any_pattern(normalized, done_patterns)
 
@@ -190,8 +202,18 @@ def _is_confirm_request(normalized: str) -> bool:
         r"yes confirm",
         r"yes confirm the order",
         r"confirm",
+        r"confirm order",
+        r"confirm my order",
         r"confirm the order",
+        r"yes confirm order",
+        r"yes confirm my order",
+        r"yes, confirm",
+        r"yes that's correct",
+        r"yes thats correct",
+        r"yes that's right",
+        r"yes thats right",
         r"yes place the order",
+        r"yes place it",
         r"place the order",
         r"go ahead and confirm",
     ]
@@ -216,16 +238,38 @@ def _looks_like_add_request(normalized: str, item_id: Optional[str]) -> bool:
 def _is_broad_add_request(normalized: str) -> bool:
     broad_add_patterns = [
         r"give me all of it",
+        r"give me all of that",
+        r"give me all of those",
         r"give me all of them",
         r"i want all of it",
+        r"i want all of that",
+        r"i want all of those",
         r"i want all of them",
         r"i want every single item",
         r"i'll take all of them",
+        r"i'll take all of that",
         r"add all of them",
         r"add all of it",
+        r"add all of that",
         r"one of each",
     ]
     return _matches_any_pattern(normalized, broad_add_patterns)
+
+
+def _is_price_lookup_request(normalized: str, item_id: Optional[str]) -> bool:
+    if not item_id:
+        return False
+
+    if "my total" in normalized or "order total" in normalized:
+        return False
+
+    price_patterns = [
+        r"how much is .+",
+        r"how much are .+",
+        r"what does .+ cost",
+        r"what is the price of .+",
+    ]
+    return any(re.fullmatch(pattern, normalized) for pattern in price_patterns)
 
 
 # ── Main entry point ────────────────────────────────────────────────────
@@ -376,6 +420,18 @@ def parse_fallback_intent(
             ),
         )
 
+    item_id = _match_item(lower)
+
+    # ── Item price lookup ───────────────────────────────────────────
+    if _is_price_lookup_request(normalized, item_id):
+        return ParsedFallbackIntent(
+            intent="price_lookup",
+            tool_name=None,
+            arguments={"item_id": item_id},
+            confidence=0.9,
+            safe_to_execute=True,
+        )
+
     # ── Compute total ───────────────────────────────────────────────
     if any(
         kw in lower for kw in ["total", "how much", "what do i owe", "price", "cost"]
@@ -431,7 +487,6 @@ def parse_fallback_intent(
         )
 
     # ── Add item ────────────────────────────────────────────────────
-    item_id = _match_item(lower)
     if _looks_like_add_request(normalized, item_id):
         if item_id:
             quantity = _extract_quantity(lower)

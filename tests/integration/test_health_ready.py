@@ -31,6 +31,11 @@ def test_ui_routes() -> None:
     assert "Chrome or Chromium" in html
     assert "Embedded previews may block microphone permissions" in html
     assert "Browser speech recognition does not expose a sensitivity control" in html
+    assert "Processing speech..." in html
+    assert "I only caught part of that. Please try again." in html
+    assert "wait until the status says" in html
+    assert "isListening" in html
+    assert "isSpeaking" in html
     assert "cleanTextForSpeech" in html
 
 

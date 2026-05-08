@@ -146,6 +146,18 @@ def test_broad_add_request_is_not_safe_to_execute():
     assert res.clarification_question is not None
 
 
+def test_broad_add_request_with_that_variant():
+    res = parse_fallback_intent("give me all of that")
+    assert res.intent == "broad_add_request"
+    assert res.safe_to_execute is False
+
+
+def test_broad_add_request_with_those_variant():
+    res = parse_fallback_intent("give me all of those")
+    assert res.intent == "broad_add_request"
+    assert res.safe_to_execute is False
+
+
 # ── Compute total ───────────────────────────────────────────────────────
 
 
@@ -155,6 +167,20 @@ def test_what_is_my_total():
         session_context={"session_id": "sess_test"},
     )
     assert res.tool_name == "compute_total"
+    assert res.safe_to_execute is True
+
+
+def test_how_much_is_veggie_quesadilla():
+    res = parse_fallback_intent("how much is the veggie quesadilla")
+    assert res.intent == "price_lookup"
+    assert res.arguments["item_id"] == "veggie_quesadilla"
+    assert res.safe_to_execute is True
+
+
+def test_how_much_is_lemonade():
+    res = parse_fallback_intent("how much is lemonade")
+    assert res.intent == "price_lookup"
+    assert res.arguments["item_id"] == "lemonade"
     assert res.safe_to_execute is True
 
 
@@ -242,9 +268,27 @@ def test_confirm_order():
     assert res.safe_to_execute is True
 
 
+def test_confirm_my_order():
+    res = parse_fallback_intent(
+        "confirm my order",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.tool_name == "confirm_order"
+    assert res.safe_to_execute is True
+
+
 def test_conversation_done_phrase():
     res = parse_fallback_intent(
         "that's it",
+        session_context={"session_id": "sess_test"},
+    )
+    assert res.intent == "conversation_done"
+    assert res.safe_to_execute is True
+
+
+def test_no_thats_all_phrase():
+    res = parse_fallback_intent(
+        "no that's all",
         session_context={"session_id": "sess_test"},
     )
     assert res.intent == "conversation_done"
