@@ -81,10 +81,13 @@ Summarized dependencies:
 ## Clean Clone Setup
 
 ```bash
-git clone <repo_url>
-cd <repo_name>
+git clone https://github.com/FernCanCode/Restaurant-Voice-Agent
+cd Restaurant-Voice-Agent
 cp .env.example .env
-# Edit .env and fill API keys listed in api_dependencies.yaml.
+# Edit .env placeholders as needed.
+# Placeholder values are acceptable for no-secret local health checks.
+# Fill ANTHROPIC_API_KEY for full LLM behavior.
+# Fill Twilio values only if testing the phone path.
 ```
 
 ## Docker Compose Startup

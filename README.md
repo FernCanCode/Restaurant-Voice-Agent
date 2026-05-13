@@ -1,6 +1,6 @@
 # Restaurant Voice Ordering Agent
 
-## Overview
+## Description
 
 The Restaurant Voice Ordering Agent is a phone-capable, MCP-enabled, RAG-grounded restaurant voice ordering agent.
 
@@ -17,25 +17,7 @@ It shall:
 - read back the order
 - confirm or cancel the order
 
-The primary production interface is Twilio Programmable Voice and the local browser voice interface is the reproducible walkthrough interface.
-
-## Key Features
-
-- Twilio-compatible phone voice routes
-- browser voice walkthrough
-- shared backend agent orchestrator
-- MCP tool layer
-- RAG menu retrieval
-- canonical menu ingestion
-- deterministic pricing and totals
-- customer name collection
-- required readback before confirmation
-- degraded LLM mode
-- degraded retrieval mode
-- structured JSON logging
-- debug/session inspection routes
-- automated tests
-- Docker Compose deployment
+The primary production interface is Twilio Programmable Voice and the local browser voice interface is the reproducible walkthrough and fallback interface.
 
 ## Technology Stack
 
@@ -59,6 +41,37 @@ The primary production interface is Twilio Programmable Voice and the local brow
 - pip-audit
 - Locust
 - Docker and Docker Compose
+
+## Quick Start
+
+Official TA/grading command sequence:
+
+```bash
+git clone https://github.com/FernCanCode/Restaurant-Voice-Agent
+cd Restaurant-Voice-Agent
+cp .env.example .env
+# Edit .env placeholders as needed.
+# Placeholder values are acceptable for no-secret local health checks.
+# Fill ANTHROPIC_API_KEY for full LLM behavior.
+# Fill Twilio values only if testing the phone path.
+docker compose up --build
+```
+
+Verify the containerized app:
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/voice/config-check
+```
+
+Browser fallback UI:
+
+```text
+http://localhost:8000
+```
+
+The browser UI is a fallback/walkthrough aid. The Twilio phone path is the primary voice path.
 
 ## Architecture Summary
 
@@ -120,32 +133,6 @@ Routes:
 - `GET /api/debug/sessions/recent`
 - `GET /api/debug/session/{session_id}`
 
-## Quick Start
-
-```bash
-git clone <repo_url>
-cd <repo_name>
-cp .env.example .env
-# Edit .env, keep placeholder values for no-secret local health checks,
-# or fill Anthropic/Twilio values if testing full voice integrations.
-# Do not commit .env or any real secrets.
-docker compose up --build
-```
-
-Then:
-```bash
-curl -s http://localhost:8000/health
-curl -s http://localhost:8000/ready
-curl -s http://localhost:8000/voice/config-check
-```
-
-Then open:
-```text
-http://localhost:8000
-```
-
-Use the browser UI for local walkthroughs and fallback debugging. The primary voice product path is the Twilio phone flow.
-
 ## API Dependencies
 
 For a complete list of dependencies, see:
@@ -187,9 +174,12 @@ Important variables:
 - `ENABLE_DEBUG_ROUTES`
 
 - Twilio credentials are required when `ENABLE_TWILIO=true`.
+- `ANTHROPIC_API_KEY` is required for full Anthropic LLM behavior.
 - Browser walkthrough does not require Twilio.
 - Missing Anthropic should trigger degraded LLM mode for simple supported flows.
 - `.env.example` contains placeholders only.
+- Placeholder values are acceptable for no-secret local health checks.
+- `.env` must not be committed.
 - `/voice/config-check` reports missing Twilio fields without exposing secrets.
 
 ## Running the App
@@ -246,13 +236,49 @@ For a real phone test:
    - `GET /api/debug/session/{session_id}`
    - logs correlated by `twilio_call_sid`, `session_id`, or `request_id`
 
+## Browser Fallback
+
+Open:
+
+```text
+http://localhost:8000
+```
+
+Use the browser UI for walkthrough and fallback verification only. It is not the main phone interface.
+
+## Results
+
+- Final preflight status: passed
+- Latest automated validation count: `264 passed`
+- Twilio phone smoke test: passed
+  - Reference: `reports/phone_smoke_test.md`
+- Browser walkthrough screenshots: captured for `US-01` through `US-10`
+  - Reference: `reports/walkthrough.md`
+- `pip-audit` note: it could not complete in the local sandbox because DNS resolution to `pypi.org` was unavailable
+  - Reference: `reports/security.txt`
+
 ## Troubleshooting
 
 - If Docker reports that port `8000` is already in use, stop the existing process or change the Docker port mapping before rerunning `docker compose up --build`.
 - Example diagnostic: `sudo lsof -i :8000`
 - Example fix: stop the process using that port, then rerun `docker compose up --build`.
+- Docker is required for the official grading/reproduction path.
 - Local Python 3.13 is not supported by the pinned dependency stack used by this project. Docker handles Python 3.11 automatically through the Dockerfile.
 - Developer-only note: if someone is debugging locally outside the grading flow, any direct Uvicorn/local-Python run is unsupported for grading and reproduction and should not be used as the TA/professor path.
+
+## Submission Artifacts
+
+- `docs/SPEC.md`
+- `docs/STORIES.md`
+- `docs/REPRODUCE.md`
+- `docs/usage.md`
+- `docs/MODEL_CARD.md`
+- `docs/LOGGING.md`
+- `grading/manifest.yaml`
+- `grading/traceability.yaml`
+- `reports/phone_smoke_test.md`
+- `reports/walkthrough.md`
+- `docs/assets/stories/us_01_expected.png` through `docs/assets/stories/us_10_expected.png`
 
 ## Reproducing Data and Indexes
 
