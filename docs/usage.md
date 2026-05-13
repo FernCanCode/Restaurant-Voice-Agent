@@ -20,13 +20,18 @@ All order actions go through deterministic Model Context Protocol (MCP) tools, a
 
 The browser interface serves as the reproducible local walkthrough interface. A Chromium-based browser is recommended.
 
-1. Start the app with Docker Compose.
-2. Open `http://localhost:8000`.
-3. Click `Start Voice Order`.
-4. Allow microphone permission if prompted.
-5. Speak the sample utterances from the user-story sections.
-6. Watch the transcript, order panel, total panel, and status indicators.
-7. Use typed fallback only if browser voice input is unavailable.
+1. Copy the environment template with `cp .env.example .env`.
+2. Fill `ANTHROPIC_API_KEY` in `.env` if you want full LLM behavior. Twilio values are optional for browser-only walkthroughs.
+3. Do not commit `.env`.
+4. Start the app with Docker Compose. This is the official grading/reproduction run path.
+5. Open `http://localhost:8000`.
+6. Click `Start Voice Order`.
+7. Allow microphone permission if prompted.
+8. Speak the sample utterances from the user-story sections.
+9. Watch the transcript, order panel, total panel, and status indicators.
+10. Use typed fallback only if browser voice input is unavailable.
+
+The browser UI is a walkthrough and fallback aid. The primary production voice path is the Twilio phone call flow.
 
 ## Production Phone Mode
 
@@ -48,6 +53,51 @@ When testing the phone path, the TA can verify the call through:
 4. `GET /api/debug/session/{session_id}` to inspect order state, customer name, total, confirmation status, and recent tool-call summaries.
 
 The phone path does not require a separate visual phone UI. The phone call is the user interface; logs and debug/session endpoints provide grading observability.
+
+### Twilio Setup Checklist
+
+Before placing a real call:
+
+1. Copy the environment template with `cp .env.example .env` if you have not already.
+2. Fill `ANTHROPIC_API_KEY` and set `ENABLE_TWILIO=true` in `.env`.
+3. Do not commit `.env`.
+4. Fill:
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_AUTH_TOKEN`
+   - `TWILIO_PHONE_NUMBER`
+   - `TWILIO_WEBHOOK_BASE_URL`
+5. Start the app with Docker Compose.
+6. Verify locally:
+   - `GET /health`
+   - `GET /ready`
+   - `GET /voice/config-check`
+7. Expose the app through ngrok or cloudflared and confirm the public URL is reachable:
+   - `GET <PUBLIC_BASE_URL>/health`
+   - `GET <PUBLIC_BASE_URL>/voice/config-check`
+8. In the Twilio Console, set the phone number voice webhook to:
+   - `POST <PUBLIC_BASE_URL>/voice/incoming`
+9. Optional status callback:
+   - `POST <PUBLIC_BASE_URL>/voice/status`
+10. After a call, inspect:
+   - `GET /api/debug/sessions/recent`
+   - `GET /api/debug/session/{session_id}`
+
+### Run-Path Notes
+
+- Docker Compose is the one official grading/reproduction run path.
+- Do not create a local Python virtual environment manually for grading.
+- The Dockerfile uses Python 3.11 automatically.
+- Local Python 3.13 is not supported by the pinned dependency stack.
+
+### Port 8000 Troubleshooting
+
+- If Docker says port `8000` is already in use, stop the existing process or change the port mapping.
+- Example diagnostic: `sudo lsof -i :8000`
+- Example fix: stop the process using that port, then rerun `docker compose up --build`.
+
+### Developer-Only Note
+
+- A direct local Uvicorn/Python run may still be useful for developer troubleshooting, but it is not the supported grading or reproduction path.
 
 ## General Troubleshooting
 

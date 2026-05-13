@@ -36,6 +36,7 @@ def test_ui_routes() -> None:
     assert "wait until the status says" in html
     assert "isListening" in html
     assert "isSpeaking" in html
+    assert "microphoneBlocked" in html
     assert "cleanTextForSpeech" in html
 
 

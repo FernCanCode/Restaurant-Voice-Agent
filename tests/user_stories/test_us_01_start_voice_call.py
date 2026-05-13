@@ -44,6 +44,7 @@ def test_us_01_start_voice_call():
     assert "wait until the status says" in html_text
     assert "isListening" in html_text
     assert "isSpeaking" in html_text
+    assert "microphoneBlocked" in html_text
     assert "cleanTextForSpeech" in html_text
 
     # 2. POST /api/browser/start-call returns greeting, empty order, etc

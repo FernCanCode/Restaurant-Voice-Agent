@@ -4,6 +4,8 @@
 
 The Restaurant Voice Ordering Agent is a phone-capable, MCP-enabled, RAG-grounded restaurant voice ordering agent.
 
+The official grading and reproduction path is Docker Compose. Docker is required for the supported run flow, and graders should not create a local Python virtual environment manually. The project image uses Python 3.11 through the Dockerfile.
+
 It shall:
 - greet restaurant callers
 - answer menu questions using retrieved menu evidence
@@ -124,20 +126,25 @@ Routes:
 git clone <repo_url>
 cd <repo_name>
 cp .env.example .env
-# Edit .env and fill keys listed in api_dependencies.yaml.
+# Edit .env, keep placeholder values for no-secret local health checks,
+# or fill Anthropic/Twilio values if testing full voice integrations.
+# Do not commit .env or any real secrets.
 docker compose up --build
 ```
 
 Then:
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/voice/config-check
 ```
 
 Then open:
 ```text
 http://localhost:8000
 ```
+
+Use the browser UI for local walkthroughs and fallback debugging. The primary voice product path is the Twilio phone flow.
 
 ## API Dependencies
 
@@ -182,8 +189,12 @@ Important variables:
 - Twilio credentials are required when `ENABLE_TWILIO=true`.
 - Browser walkthrough does not require Twilio.
 - Missing Anthropic should trigger degraded LLM mode for simple supported flows.
+- `.env.example` contains placeholders only.
+- `/voice/config-check` reports missing Twilio fields without exposing secrets.
 
 ## Running the App
+
+Official grading/reproduction path:
 
 ```bash
 docker compose up --build
@@ -193,18 +204,55 @@ Expected:
 - app listens on `http://localhost:8000`
 - `/health` works
 - `/ready` works
+- `/voice/config-check` shows Twilio enabled/configured status without secrets
 - browser voice UI loads
 - Twilio routes are registered
+- the container uses Python 3.11 from the Dockerfile
 
 ## Health and Readiness Checks
 
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/voice/config-check
 ```
 
 - `/health`: Checks if the service is alive and responding.
 - `/ready`: Reports menu, RAG, MCP, Anthropic, Twilio, browser voice, and degraded-mode status.
+- `/voice/config-check`: Confirms whether Twilio is enabled/configured and lists missing fields without exposing secrets.
+
+## Twilio Phone Runbook
+
+For a real phone test:
+
+1. Set `ENABLE_TWILIO=true` and fill the Twilio values in `.env`.
+2. Fill `ANTHROPIC_API_KEY` and, for phone mode, the Twilio values in `.env`. Do not commit `.env`.
+3. Start the app with `docker compose up --build`.
+4. Expose port `8000` through ngrok or cloudflared.
+5. Set `TWILIO_WEBHOOK_BASE_URL` to that public base URL.
+6. Verify:
+   - `curl -s http://localhost:8000/health`
+   - `curl -s http://localhost:8000/ready`
+   - `curl -s http://localhost:8000/voice/config-check`
+   - `curl -s <PUBLIC_BASE_URL>/health`
+   - `curl -s <PUBLIC_BASE_URL>/voice/config-check`
+7. In the Twilio Console, configure the phone number voice webhook as:
+   - `POST <PUBLIC_BASE_URL>/voice/incoming`
+8. Optional status callback:
+   - `POST <PUBLIC_BASE_URL>/voice/status`
+9. Call the Twilio number from a real phone.
+10. After the call, inspect:
+   - `GET /api/debug/sessions/recent`
+   - `GET /api/debug/session/{session_id}`
+   - logs correlated by `twilio_call_sid`, `session_id`, or `request_id`
+
+## Troubleshooting
+
+- If Docker reports that port `8000` is already in use, stop the existing process or change the Docker port mapping before rerunning `docker compose up --build`.
+- Example diagnostic: `sudo lsof -i :8000`
+- Example fix: stop the process using that port, then rerun `docker compose up --build`.
+- Local Python 3.13 is not supported by the pinned dependency stack used by this project. Docker handles Python 3.11 automatically through the Dockerfile.
+- Developer-only note: if someone is debugging locally outside the grading flow, any direct Uvicorn/local-Python run is unsupported for grading and reproduction and should not be used as the TA/professor path.
 
 ## Reproducing Data and Indexes
 

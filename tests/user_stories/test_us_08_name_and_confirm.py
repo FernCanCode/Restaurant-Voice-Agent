@@ -101,3 +101,153 @@ def test_us_08_no_thats_all_and_confirm_requirements():
         )
     )
     assert "what name should i put the order under" in res_confirm.agent_text.lower()
+
+
+@pytest.mark.user_story("US-08")
+def test_us_08_bare_name_and_its_name_capture():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Add one chicken taco",
+            channel=Channel.browser,
+        )
+    )
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="I'm ready",
+            channel=Channel.browser,
+        )
+    )
+
+    res_name = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Fernando",
+            channel=Channel.browser,
+        )
+    )
+    assert res_name.order.customer_name == "Fernando"
+    assert res_name.order.readback_performed is True
+    assert "would you like me to confirm this order" in res_name.agent_text.lower()
+
+    session2 = start_session()
+    res_explicit = process_turn(
+        AgentTurnRequest(
+            session_id=session2.session_id,
+            utterance="It's Fernando",
+            channel=Channel.browser,
+        )
+    )
+    assert res_explicit.order.customer_name == "Fernando"
+
+
+@pytest.mark.user_story("US-08")
+def test_us_08_finish_order_after_name_reads_back():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Add one chicken taco",
+            channel=Channel.browser,
+        )
+    )
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="It's Fernando",
+            channel=Channel.browser,
+        )
+    )
+
+    res = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="finish order",
+            channel=Channel.browser,
+        )
+    )
+    assert res.order.readback_performed is True
+    assert "would you like me to confirm this order" in res.agent_text.lower()
+
+
+@pytest.mark.user_story("US-08")
+def test_us_08_okay_thats_all_and_done_ordering_follow_checkout_flow():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Add one chicken taco",
+            channel=Channel.browser,
+        )
+    )
+
+    res_done_before_name = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="okay that's all",
+            channel=Channel.browser,
+        )
+    )
+    assert (
+        "what name should i put the order under"
+        in res_done_before_name.agent_text.lower()
+    )
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Fernando",
+            channel=Channel.browser,
+        )
+    )
+
+    res_done_after_name = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="I'm done ordering",
+            channel=Channel.browser,
+        )
+    )
+    assert res_done_after_name.order.readback_performed is True
+    assert (
+        "would you like me to confirm this order"
+        in res_done_after_name.agent_text.lower()
+    )
+
+
+@pytest.mark.user_story("US-08")
+def test_us_08_confirm_then_bare_name_continues_checkout_flow():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Add one chicken taco",
+            channel=Channel.browser,
+        )
+    )
+
+    res_confirm = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="confirm order",
+            channel=Channel.browser,
+        )
+    )
+    assert "what name should i put the order under" in res_confirm.agent_text.lower()
+
+    res_name = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Fernando",
+            channel=Channel.browser,
+        )
+    )
+    assert res_name.order.customer_name == "Fernando"
+    assert res_name.order.readback_performed is True
+    assert "would you like me to confirm this order" in res_name.agent_text.lower()

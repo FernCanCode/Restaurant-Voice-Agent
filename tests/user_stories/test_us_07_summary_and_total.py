@@ -14,7 +14,7 @@ def test_us_07_summary_and_total():
 
     price_req = AgentTurnRequest(
         session_id=session.session_id,
-        utterance="how much is the veggie quesadilla",
+        utterance="how much is the quesadilla",
         channel=Channel.browser,
     )
     price_res = process_turn(price_req)
@@ -53,3 +53,34 @@ def test_us_07_summary_and_total():
 
     assert res2.intent == "get_order_summary"
     assert res2.order.readback_performed is True
+
+
+@pytest.mark.user_story("US-07")
+def test_us_07_duplicate_summary_lines_are_grouped():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Add a quesadilla",
+            channel=Channel.browser,
+        )
+    )
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Add a quesadilla",
+            channel=Channel.browser,
+        )
+    )
+
+    res = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="Read back my order",
+            channel=Channel.browser,
+        )
+    )
+    lowered = res.agent_text.lower()
+    assert "two veggie quesadillas" in lowered or "2 veggie quesadillas" in lowered
+    assert lowered.count("one veggie quesadilla") < 2

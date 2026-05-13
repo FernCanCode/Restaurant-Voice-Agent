@@ -528,6 +528,7 @@ def api_debug_session(request: Request, session_id: str) -> Any:
         order=order,
         recent_tool_calls=[],
         recent_retrievals=[],
+        recent_turn_diagnostics=session.recent_turn_diagnostics,
         degraded_llm=session.degraded_llm,
         degraded_retrieval=session.degraded_retrieval,
         request_id=request.state.request_id,

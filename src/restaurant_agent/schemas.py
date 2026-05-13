@@ -118,11 +118,13 @@ class DialogueState(BaseModel):
     dialogue_mode: DialogueMode
     pending_action: Optional[str] = None
     pending_question: Optional[str] = None
+    pending_context: Dict[str, Any] = Field(default_factory=dict)
     last_user_utterance: Optional[str] = None
     last_agent_response: Optional[str] = None
     last_intent: Optional[str] = None
     last_mentioned_item_id: Optional[str] = None
     last_retrieved_candidates: List[Any] = Field(default_factory=list)
+    recent_turn_diagnostics: List[Dict[str, Any]] = Field(default_factory=list)
     awaiting_final_confirmation: bool
     order_readback_required: bool
     turns: List[DialogueTurn] = Field(default_factory=list)
@@ -233,6 +235,7 @@ class DebugSessionResponse(BaseModel):
     order: OrderState
     recent_tool_calls: List[ToolCallSummary] = Field(default_factory=list)
     recent_retrievals: List[RetrievalSummary] = Field(default_factory=list)
+    recent_turn_diagnostics: List[Dict[str, Any]] = Field(default_factory=list)
     degraded_llm: bool
     degraded_retrieval: bool
     request_id: str

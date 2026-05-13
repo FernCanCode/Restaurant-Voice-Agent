@@ -45,12 +45,14 @@ def set_pending_action(
     session_id: str,
     pending_action: str,
     pending_question: Optional[str] = None,
+    pending_context: Optional[Dict[str, Any]] = None,
 ) -> DialogueState:
     state = get_session(session_id)
     if not state:
         raise ValueError(f"Session not found: {session_id}")
     state.pending_action = pending_action
     state.pending_question = pending_question
+    state.pending_context = pending_context or {}
     return update_session(state)
 
 
@@ -60,6 +62,7 @@ def clear_pending_action(session_id: str) -> DialogueState:
         raise ValueError(f"Session not found: {session_id}")
     state.pending_action = None
     state.pending_question = None
+    state.pending_context = {}
     return update_session(state)
 
 
@@ -70,6 +73,25 @@ def set_last_retrieved_candidates(
     if not state:
         raise ValueError(f"Session not found: {session_id}")
     state.last_retrieved_candidates = candidates
+    return update_session(state)
+
+
+def set_last_mentioned_item(session_id: str, item_id: Optional[str]) -> DialogueState:
+    state = get_session(session_id)
+    if not state:
+        raise ValueError(f"Session not found: {session_id}")
+    state.last_mentioned_item_id = item_id
+    return update_session(state)
+
+
+def append_turn_diagnostic(
+    session_id: str, diagnostic: Dict[str, Any], limit: int = 10
+) -> DialogueState:
+    state = get_session(session_id)
+    if not state:
+        raise ValueError(f"Session not found: {session_id}")
+    state.recent_turn_diagnostics.append(diagnostic)
+    state.recent_turn_diagnostics = state.recent_turn_diagnostics[-limit:]
     return update_session(state)
 
 

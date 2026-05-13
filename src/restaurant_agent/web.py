@@ -423,6 +423,7 @@ def render_browser_ui() -> str:
         let activeInputMode = 'voice';
         let autoListenEnabled = localStorage.getItem('autoListenEnabled') !== 'false';
         let currentOrderStatus = 'none';
+        let microphoneBlocked = false;
 
         const speechRecognitionUnavailableMessage =
             'Speech recognition is not available in this browser. For voice input, use Chrome or Chromium. You can still use typed fallback for debugging/accessibility.';
@@ -510,6 +511,9 @@ def render_browser_ui() -> str:
         function handleAutoListenChange() {
             const toggle = document.getElementById('auto-listen-toggle');
             autoListenEnabled = Boolean(toggle.checked);
+            if (autoListenEnabled && microphoneBlocked) {
+                microphoneBlocked = false;
+            }
             localStorage.setItem('autoListenEnabled', autoListenEnabled ? 'true' : 'false');
             if (!autoListenEnabled) {
                 focusFallbackInput();
@@ -619,6 +623,12 @@ def render_browser_ui() -> str:
                 return;
             }
 
+            if (microphoneBlocked && reason !== 'manual') {
+                updateVoiceLiveStatus(microphonePermissionBlockedMessage);
+                maybeFocusFallbackInput();
+                return;
+            }
+
             if (isSpeaking && synthesis) {
                 speechToken += 1;
                 isSpeaking = false;
@@ -629,6 +639,9 @@ def render_browser_ui() -> str:
 
             recognitionStarting = true;
             activeInputMode = 'voice';
+            if (reason === 'manual') {
+                microphoneBlocked = false;
+            }
             updateVoiceLiveStatus('Listening... speak now.');
 
             try {
@@ -715,8 +728,11 @@ def render_browser_ui() -> str:
                 console.error('Speech recognition error', event.error);
                 recognitionStarting = false;
                 if (event.error === 'not-allowed') {
-                    appendMessage('system', microphonePermissionBlockedMessage);
-                    updateVoiceLiveStatus('Microphone access was blocked.');
+                    microphoneBlocked = true;
+                    autoListenEnabled = false;
+                    syncAutoListenToggle();
+                    localStorage.setItem('autoListenEnabled', 'false');
+                    updateVoiceLiveStatus(microphonePermissionBlockedMessage);
                 } else if (event.error === 'no-speech') {
                     appendMessage('system', 'No speech detected. Try again or use typed fallback.');
                     updateVoiceLiveStatus('No speech detected. Try speaking closer to the microphone or check your system input volume.');
@@ -865,6 +881,8 @@ def render_browser_ui() -> str:
                 if (recognition && (isListening || recognitionStarting)) {
                     recognition.stop();
                 }
+            } else if (microphoneBlocked) {
+                updateConnectionStatus('Microphone blocked', 'cancelled');
             } else if (isListening) {
                 updateConnectionStatus('Listening...', 'active');
             } else {

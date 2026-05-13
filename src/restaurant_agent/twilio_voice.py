@@ -13,9 +13,13 @@ def _twiml_document(body: str) -> str:
 def build_gather_response(message: str, action_url: str = "/voice/turn") -> str:
     safe_message = escape(message)
     safe_action_url = escape(action_url, {'"': "&quot;"})
+    # Twilio phone latency is influenced both by network/STT turnaround and by
+    # how long Gather waits for speech or trailing silence. These settings keep
+    # voice turns responsive without cutting callers off too aggressively.
     return _twiml_document(
         (
-            f'<Gather input="speech" action="{safe_action_url}" method="POST">'
+            f'<Gather input="speech" action="{safe_action_url}" method="POST" '
+            'speechTimeout="auto" timeout="4">'
             f"<Say>{safe_message}</Say>"
             "</Gather>"
         )

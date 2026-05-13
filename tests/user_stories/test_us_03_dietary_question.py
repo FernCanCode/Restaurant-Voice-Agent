@@ -48,7 +48,7 @@ def test_us_03_vegetarian_broad_add_requires_confirmation():
     broad_add_response = process_turn(
         AgentTurnRequest(
             session_id=session.session_id,
-            utterance="give me all of that",
+            utterance="give me one of each of those",
             channel=Channel.browser,
         )
     )
@@ -85,9 +85,40 @@ def test_us_03_vegetarian_broad_add_those_variant_requires_confirmation():
     broad_add_response = process_turn(
         AgentTurnRequest(
             session_id=session.session_id,
-            utterance="give me all of those",
+            utterance="all of them",
             channel=Channel.browser,
         )
     )
     assert len(broad_add_response.order.items) == 0
     assert "just to confirm" in broad_add_response.agent_text.lower()
+
+
+@pytest.mark.user_story("US-03")
+def test_us_03_pending_add_all_allows_price_lookup():
+    session = start_session()
+
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="what kind of vegetarian items do you have",
+            channel=Channel.browser,
+        )
+    )
+    process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="all of those",
+            channel=Channel.browser,
+        )
+    )
+
+    price_response = process_turn(
+        AgentTurnRequest(
+            session_id=session.session_id,
+            utterance="how much is the quesadilla",
+            channel=Channel.browser,
+        )
+    )
+    assert price_response.intent == "price_lookup"
+    assert "9.00" in price_response.agent_text
+    assert len(price_response.order.items) == 0

@@ -23,3 +23,5 @@ def test_us_09_unknown_menu_item():
     assert len(res.order.items) == 0
     assert not any(tc.status == "success" for tc in res.tool_calls)
     assert res.agent_text is not None
+    assert "don't see lobster pizza on the menu" in res.agent_text.lower()
+    assert "not sure which item" not in res.agent_text.lower()

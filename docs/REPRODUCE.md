@@ -4,6 +4,8 @@
 
 The project is fully reproducible from a clean repository clone using `.env.example`, `api_dependencies.yaml`, Docker Compose, and Makefile commands.
 
+The official grading and reproduction path is Docker Compose. Docker is required. Graders should not create a local Python virtual environment manually, and should not treat local Python as a second supported run path. The Docker image uses Python 3.11 through the Dockerfile.
+
 The default reproducibility path uses the committed raw menu fixture:
 
 ```text
@@ -16,7 +18,6 @@ The production phone path uses Twilio when credentials and a public webhook URL 
 
 ## Hardware and Software Requirements
 
-- Python 3.11
 - Docker
 - Docker Compose
 - Make
@@ -34,6 +35,8 @@ cp .env.example .env
 ```
 
 After copying the environment template, the TA should fill values from `api_dependencies.yaml`.
+
+Do not commit `.env` or any real credentials.
 
 Important variables:
 
@@ -58,6 +61,8 @@ ENABLE_DEBUG_ROUTES
 - If Anthropic is missing or unavailable, degraded LLM mode should handle simple high-confidence requests safely.
 - Twilio variables are required only when `ENABLE_TWILIO=true`.
 - Browser voice walkthrough does not require Twilio credentials.
+- `.env.example` contains placeholders only.
+- Placeholder values are acceptable for local no-secret health/readiness checks.
 
 ## External API Dependencies
 
@@ -84,6 +89,8 @@ cp .env.example .env
 
 ## Docker Compose Startup
 
+Official grading/reproduction command:
+
 ```bash
 docker compose up --build
 ```
@@ -92,14 +99,17 @@ Expected result:
 - FastAPI app starts.
 - App listens on `http://localhost:8000`.
 - `GET /health` returns OK.
-- Browser voice interface is available.
 - Twilio routes are registered.
+- Browser voice interface is available as the local walkthrough/fallback path.
+- Twilio remains the primary production voice path when configured.
+- The container runtime uses Python 3.11 from `python:3.11-slim`.
 
 ## Health and Readiness Checks
 
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/voice/config-check
 ```
 
 Expected health response:
@@ -113,6 +123,56 @@ Expected health response:
 ```
 
 `/ready` reports menu, RAG, MCP, Anthropic, Twilio, browser voice, and degraded-mode status.
+
+`/voice/config-check` reports whether Twilio is enabled/configured and lists any missing fields without exposing secrets.
+
+## Public Twilio Webhook Verification
+
+If live phone validation is required:
+
+1. Expose the Docker app on port `8000` through a public HTTPS URL such as ngrok or cloudflared.
+2. Set `TWILIO_WEBHOOK_BASE_URL` in `.env` to that public base URL.
+3. Verify:
+
+```bash
+curl -s <PUBLIC_BASE_URL>/health
+curl -s <PUBLIC_BASE_URL>/voice/config-check
+```
+
+Also verify local operator endpoints:
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/voice/config-check
+```
+
+4. In the Twilio Console, configure the phone number voice webhook as:
+
+```text
+POST <PUBLIC_BASE_URL>/voice/incoming
+```
+
+Optional status callback:
+
+```text
+POST <PUBLIC_BASE_URL>/voice/status
+```
+
+After a call, verify observability with:
+
+```text
+GET /api/debug/sessions/recent
+GET /api/debug/session/{session_id}
+```
+
+## Troubleshooting
+
+- If Docker reports that port `8000` is already in use, stop the existing process or adjust the port mapping, then rerun `docker compose up --build`.
+- Example diagnostic: `sudo lsof -i :8000`
+- Example fix: stop the process using that port, then rerun `docker compose up --build`.
+- Local Python 3.13 is not supported by the pinned dependency stack used by this project. Docker handles Python 3.11 automatically through the Dockerfile.
+- Developer-only note: direct local Uvicorn/Python runs are not the supported grading or reproduction path.
 
 ## Data Reproduction
 

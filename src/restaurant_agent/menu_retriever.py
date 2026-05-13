@@ -28,6 +28,7 @@ _GENERIC_CATEGORY_WORDS = {
 }
 
 _DIETARY_TAGS = {"vegetarian", "vegan"}
+_DRINK_ITEM_IDS = {"lemonade", "horchata"}
 
 
 def _tokenize_query(query: str) -> List[str]:
@@ -75,6 +76,29 @@ def explicit_dietary_tag_query(query: str) -> str | None:
     return None
 
 
+def explicit_collection_query(query: str) -> str | None:
+    tokens = _tokenize_query(query)
+    token_set = set(tokens)
+
+    if is_explicit_taco_category_query(query):
+        return "tacos"
+
+    dietary_tag = explicit_dietary_tag_query(query)
+    if dietary_tag:
+        return dietary_tag
+
+    if "drink" in token_set or "drinks" in token_set:
+        return "drinks"
+
+    if "meat" in token_set or "protein" in token_set or "proteins" in token_set:
+        return "meat"
+
+    if "side" in token_set or "sides" in token_set:
+        return "sides"
+
+    return None
+
+
 def _filter_dietary_tag(
     menu: CanonicalMenu, dietary_tag: str
 ) -> List[MenuSearchResult]:
@@ -97,6 +121,75 @@ def _filter_dietary_tag(
                 )
             )
 
+    return sorted(results, key=lambda item: item.name)
+
+
+def _filter_drinks(menu: CanonicalMenu) -> List[MenuSearchResult]:
+    results: List[MenuSearchResult] = []
+    for item in menu.items:
+        if not item.available or item.id not in _DRINK_ITEM_IDS:
+            continue
+        results.append(
+            MenuSearchResult(
+                item_id=item.id,
+                name=item.name,
+                category=item.category,
+                description=item.description,
+                price=item.base_price,
+                score=0.9,
+                source_text=item.source_text,
+            )
+        )
+    return sorted(results, key=lambda item: item.name)
+
+
+def _filter_meat_options(menu: CanonicalMenu) -> List[MenuSearchResult]:
+    results: List[MenuSearchResult] = []
+    for item in menu.items:
+        if not item.available:
+            continue
+
+        normalized_category = item.category.strip().lower()
+        normalized_tags = {tag.strip().lower() for tag in item.dietary_tags}
+        if normalized_category == "sides & drinks":
+            continue
+        if {"vegetarian", "vegan"} & normalized_tags:
+            continue
+
+        results.append(
+            MenuSearchResult(
+                item_id=item.id,
+                name=item.name,
+                category=item.category,
+                description=item.description,
+                price=item.base_price,
+                score=0.9,
+                source_text=item.source_text,
+            )
+        )
+    return sorted(results, key=lambda item: item.name)
+
+
+def _filter_sides(menu: CanonicalMenu) -> List[MenuSearchResult]:
+    results: List[MenuSearchResult] = []
+    for item in menu.items:
+        if not item.available:
+            continue
+        if item.id in _DRINK_ITEM_IDS:
+            continue
+        if item.category.strip().lower() != "sides & drinks":
+            continue
+        results.append(
+            MenuSearchResult(
+                item_id=item.id,
+                name=item.name,
+                category=item.category,
+                description=item.description,
+                price=item.base_price,
+                score=0.88,
+                source_text=item.source_text,
+            )
+        )
     return sorted(results, key=lambda item: item.name)
 
 
@@ -223,12 +316,17 @@ def search_menu(
     index_dir: Union[str, Path],
     top_k: int = 5,
 ) -> List[MenuSearchResult]:
-    if is_explicit_taco_category_query(query):
+    collection_query = explicit_collection_query(query)
+    if collection_query == "tacos":
         return _filter_taco_category(menu)[:top_k]
-
-    dietary_tag = explicit_dietary_tag_query(query)
-    if dietary_tag:
-        return _filter_dietary_tag(menu, dietary_tag)[:top_k]
+    if collection_query in _DIETARY_TAGS:
+        return _filter_dietary_tag(menu, collection_query)[:top_k]
+    if collection_query == "drinks":
+        return _filter_drinks(menu)[:top_k]
+    if collection_query == "meat":
+        return _filter_meat_options(menu)[:top_k]
+    if collection_query == "sides":
+        return _filter_sides(menu)[:top_k]
 
     meta = load_rag_metadata(index_dir)
     degraded = meta.get("degraded_mode", True)
