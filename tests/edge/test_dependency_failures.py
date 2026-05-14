@@ -20,7 +20,6 @@ from restaurant_agent.llm_client import (
     propose_tool_route,
 )
 
-
 # ── Fixture: ensure no real key ─────────────────────────────────────────
 
 

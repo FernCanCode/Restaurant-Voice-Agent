@@ -1,6 +1,7 @@
 import pytest
 from starlette.requests import Request
 
+from tests.assertions import assert_offer_more_items
 from restaurant_agent.api import api_create_session, api_turn
 from restaurant_agent.schemas import AgentTurnRequest, CreateSessionRequest
 from restaurant_agent.session_store import get_session
@@ -88,7 +89,7 @@ def test_turn_add_chicken_tacos_updates_order() -> None:
     assert data["intent"] == "add_order_item"
     assert data["order"]["items"][0]["item_id"] == "chicken_tacos"
     assert data["order"]["items"][0]["quantity"] == 2
-    assert "would you like anything else" in data["agent_text"].lower()
+    assert_offer_more_items(data["agent_text"])
 
 
 def test_turn_natural_phrase_adds_item() -> None:
@@ -164,7 +165,7 @@ def test_broad_add_requires_confirmation_before_mutation() -> None:
         "lemonade",
         "horchata",
     }.issubset(item_ids)
-    assert "would you like anything else" in confirm_response["agent_text"].lower()
+    assert_offer_more_items(confirm_response["agent_text"])
     assert any(
         tool_call["tool_name"] == "add_order_item"
         for tool_call in confirm_response["tool_calls"]
@@ -220,7 +221,7 @@ def test_pending_add_all_allows_price_lookup_before_confirmation() -> None:
         ),
     ).model_dump()
     assert len(confirm_response["order"]["items"]) >= 2
-    assert "would you like anything else" in confirm_response["agent_text"].lower()
+    assert_offer_more_items(confirm_response["agent_text"])
 
 
 def test_broad_add_decline_does_not_change_order() -> None:
@@ -342,7 +343,7 @@ def test_multi_item_add_fish_tacos_and_burger() -> None:
     ).model_dump()
     item_ids = [item["item_id"] for item in response["order"]["items"]]
     assert item_ids == ["crispy_fish_tacos", "classic_burger"]
-    assert "would you like anything else" in response["agent_text"].lower()
+    assert_offer_more_items(response["agent_text"])
 
 
 def test_turn_unsupported_modification_asks_clarification() -> None:
@@ -640,7 +641,7 @@ def test_pronoun_followup_after_price_lookup_adds_last_item() -> None:
         ),
     ).model_dump()
     assert response["order"]["items"][0]["item_id"] == "veggie_quesadilla"
-    assert "would you like anything else" in response["agent_text"].lower()
+    assert_offer_more_items(response["agent_text"])
 
 
 def test_numeric_pronoun_followup_after_price_lookup_adds_last_item() -> None:
@@ -671,7 +672,7 @@ def test_numeric_pronoun_followup_after_price_lookup_adds_last_item() -> None:
     ).model_dump()
     assert response["order"]["items"][0]["item_id"] == "veggie_quesadilla"
     assert response["order"]["items"][0]["quantity"] == 1
-    assert "would you like anything else" in response["agent_text"].lower()
+    assert_offer_more_items(response["agent_text"])
 
 
 def test_thats_it_asks_for_name_then_reads_back_then_confirms() -> None:

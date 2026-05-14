@@ -51,7 +51,6 @@ from restaurant_agent.session_store import (
     update_session,
 )
 
-
 _NUMBER_WORDS = {
     1: "one",
     2: "two",

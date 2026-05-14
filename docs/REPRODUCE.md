@@ -125,14 +125,17 @@ curl -s http://localhost:8000/voice/config-check
 Expected result:
 - `/health` returns status ok.
 - `/ready` returns ready components or degraded status as documented.
-- `/voice/config-check` reports Twilio missing fields without exposing secrets.
+- `/voice/config-check` is expected to show Twilio disabled or unconfigured.
+- Missing Twilio fields are expected in Mode A and are not a failure for this basic verification mode.
 - Browser fallback opens at `http://localhost:8000`.
 
 ### Mode B — Full Twilio Phone + Anthropic Verification
 
 Use this mode if you want to reproduce the real phone smoke test.
 
-Before running Docker, edit `.env` and set these required fields:
+Before running Docker:
+1. Start ngrok or cloudflared for local port `8000` and copy the public HTTPS base URL.
+2. Edit `.env` and set these required fields:
 - `ANTHROPIC_API_KEY=<your Anthropic API key>`
 - `ANTHROPIC_MODEL=claude-haiku-4-5`
 - `ENABLE_TWILIO=true`
@@ -147,9 +150,16 @@ Then run:
 docker compose up --build
 ```
 
-Then expose local port `8000` through ngrok or cloudflared and configure Twilio:
+Then configure Twilio using that same public base URL:
 - Voice webhook: `POST <PUBLIC_BASE_URL>/voice/incoming`
 - Status callback: `POST <PUBLIC_BASE_URL>/voice/status`
+
+If `.env` is changed after Docker is already running, restart the app:
+
+```bash
+docker compose down
+docker compose up --build
+```
 
 Then verify:
 
@@ -183,9 +193,12 @@ Expected health response:
 
 If live phone validation is required:
 
-1. Expose the Docker app on port `8000` through a public HTTPS URL such as ngrok or cloudflared.
-2. Set `TWILIO_WEBHOOK_BASE_URL` in `.env` to that public base URL.
-3. Verify:
+1. Start ngrok or cloudflared for local port `8000` and copy the public HTTPS base URL.
+2. Set `TWILIO_WEBHOOK_BASE_URL` in `.env` to that public base URL before starting Docker.
+3. If `.env` changes after Docker is already running, restart with:
+   - `docker compose down`
+   - `docker compose up --build`
+4. Verify:
 
 ```bash
 curl -s <PUBLIC_BASE_URL>/health
@@ -200,7 +213,7 @@ curl -s http://localhost:8000/ready
 curl -s http://localhost:8000/voice/config-check
 ```
 
-4. In the Twilio Console, configure the phone number voice webhook as:
+5. In the Twilio Console, configure the phone number voice webhook as:
 
 ```text
 POST <PUBLIC_BASE_URL>/voice/incoming
@@ -229,41 +242,32 @@ GET /api/debug/session/{session_id}
 
 ## Data Reproduction
 
-```bash
-make download-data
-```
+Official one-command replay:
 
-Expected behavior:
-- verifies or prepares `data/raw/sample_restaurant_menu.html`
-- creates required data directories
-- does not fetch live restaurant websites during grading
-
-## Model Preparation
-
-```bash
-make download-models
-```
-
-Expected behavior:
-- prepares `sentence-transformers/all-MiniLM-L6-v2`
-- uses local Hugging Face/sentence-transformers cache paths when configured
-- does not download an external LLM
-- does not require Anthropic API access
-
-## Full Reproduction Command
+Run from the repository root on the host. This repository automation command executes through Docker Compose, does not replace `docker compose up --build`, and does not require host Python packages.
 
 ```bash
 make reproduce
 ```
 
+Helper commands for debugging the reproduction pipeline:
+
+Run from the repository root on the host:
+
+```bash
+make download-data
+make download-models
+```
+
 Expected behavior:
-- runs data preparation
-- runs model preparation
-- parses raw menu fixture
-- writes canonical menu JSON
-- builds RAG index
-- runs tests or required validation checks
-- generates reports
+- verifies or prepares `data/raw/sample_restaurant_menu.html`
+- creates required data directories
+- prepares `sentence-transformers/all-MiniLM-L6-v2`
+- uses local Hugging Face/sentence-transformers cache paths when configured
+- does not download an external LLM
+- does not require Anthropic API access
+
+`make reproduce` runs data preparation, model preparation, canonical menu generation, and RAG index building.
 
 Expected generated data:
 
@@ -277,6 +281,8 @@ data/index/embeddings.npy
 If embeddings are unavailable, `menu_metadata.json` should document degraded retrieval mode.
 
 ## Test Reproduction
+
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
 
 ```bash
 make test
@@ -298,6 +304,8 @@ Expected thresholds:
 
 ## Lint and Security Reproduction
 
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
+
 ```bash
 make lint
 ```
@@ -318,6 +326,8 @@ Unresolved Critical or High vulnerabilities should fail the lint/security gate.
 
 ## Load Test Reproduction
 
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
+
 ```bash
 make loadtest
 ```
@@ -336,6 +346,8 @@ Expected target:
 
 ## Demo Reproduction
 
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
+
 ```bash
 make demo
 ```
@@ -344,6 +356,12 @@ or:
 
 ```bash
 scripts/demo.sh
+```
+
+`scripts/regenerate.sh` is also run from the repository root on the host:
+
+```bash
+scripts/regenerate.sh
 ```
 
 Expected behavior:
@@ -375,6 +393,8 @@ The demo should not require Twilio.
 | Security report | `reports/security.txt` | `make lint` |
 | Benchmark report | `reports/benchmarks.json` | `make loadtest` |
 
+Run every `make ...` command in this table from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
+
 ## Expected Reports
 
 - JUnit XML for test reporting
@@ -387,16 +407,36 @@ The demo should not require Twilio.
 
 To test the phone path when credentials are available:
 
-1. Set `ENABLE_TWILIO=true`.
-2. Fill Twilio variables in `.env`.
-3. Expose the app publicly through a deployment URL or approved webhook tunnel.
-4. Configure the Twilio number voice webhook to:
+1. Start ngrok or cloudflared for local port `8000` and copy the public HTTPS base URL.
+2. Edit `.env` and set:
+   - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_MODEL=claude-haiku-4-5`
+   - `ENABLE_TWILIO=true`
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_AUTH_TOKEN`
+   - `TWILIO_PHONE_NUMBER`
+   - `TWILIO_WEBHOOK_BASE_URL=<PUBLIC_BASE_URL>`
+3. Start the app with:
 
-```text
-<public_base_url>/voice/incoming
+```bash
+docker compose up --build
 ```
 
-5. Start the app.
+4. If `.env` was changed after Docker was already running, restart with:
+   - `docker compose down`
+   - `docker compose up --build`
+5. Configure the Twilio number voice webhook to:
+
+```text
+POST <PUBLIC_BASE_URL>/voice/incoming
+```
+
+Optional status callback:
+
+```text
+POST <PUBLIC_BASE_URL>/voice/status
+```
+
 6. Call the Twilio number.
 7. Verify the spoken interaction.
 8. Inspect structured logs.
@@ -462,7 +502,7 @@ Expected behavior:
 
 ### Missing RAG Index
 Expected behavior:
-- run `make reproduce` or `POST /api/menu/rebuild-index`
+- run `make reproduce` from the repository root on the host, or `POST /api/menu/rebuild-index`
 
 ### Payment Request
 Expected behavior:
@@ -473,12 +513,12 @@ Expected behavior:
 - `docker compose up --build` starts the app.
 - `GET /health` returns HTTP 200.
 - `GET /ready` reports system readiness or documented degraded mode.
-- `make download-data` succeeds.
-- `make download-models` succeeds or fails with clear remediation.
-- `make reproduce` generates menu JSON and RAG index artifacts.
-- `make test` generates required reports.
-- `make lint` generates `reports/security.txt`.
-- `make loadtest` generates `reports/benchmarks.json`.
+- `make download-data` from the repository root on the host succeeds.
+- `make download-models` from the repository root on the host succeeds or fails with clear remediation.
+- `make reproduce` from the repository root on the host generates menu JSON and RAG index artifacts.
+- `make test` from the repository root on the host generates required reports.
+- `make lint` from the repository root on the host generates `reports/security.txt`.
+- `make loadtest` from the repository root on the host generates `reports/benchmarks.json`.
 - Browser voice walkthrough can execute all user stories.
 - Twilio phone path can be tested when credentials and public webhook URL are configured.
 - No undocumented manual setup is required.

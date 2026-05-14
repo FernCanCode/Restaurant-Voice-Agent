@@ -1,13 +1,14 @@
 import re
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Union, cast
 
 import numpy as np
+import numpy.typing as npt
 from rapidfuzz import fuzz, process
 
+from restaurant_agent.embedding_model import load_sentence_transformer
 from restaurant_agent.rag_index import load_menu_chunks, load_rag_metadata
 from restaurant_agent.schemas import CanonicalMenu, MenuSearchResult
-
 
 _GENERIC_CATEGORY_WORDS = {
     "what",
@@ -263,18 +264,15 @@ def vector_search_menu(
         return []
 
     try:
-        # type: ignore
-        from sentence_transformers import SentenceTransformer
-
         # Never trigger a model download during request handling. If the model
         # is not already present locally, degrade to lexical/structured search.
-        model = SentenceTransformer(
-            "sentence-transformers/all-MiniLM-L6-v2",
-            local_files_only=True,
+        model = load_sentence_transformer(local_files_only=True)
+        query_emb = cast(
+            npt.NDArray[np.float64],
+            model.encode(query, show_progress_bar=False),
         )
-        query_emb = model.encode(query, show_progress_bar=False)
 
-        doc_embs = np.load(embeddings_path)
+        doc_embs = cast(npt.NDArray[np.float64], np.load(embeddings_path))
         chunks = load_menu_chunks(idx_dir)
 
         if not chunks or len(chunks) != len(doc_embs):

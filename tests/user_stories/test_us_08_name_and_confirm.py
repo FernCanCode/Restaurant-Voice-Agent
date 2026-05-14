@@ -1,4 +1,5 @@
 import pytest
+from tests.assertions import assert_offer_more_items
 from restaurant_agent.schemas import AgentTurnRequest, Channel
 from restaurant_agent.agent import start_session, process_turn
 
@@ -20,7 +21,7 @@ def test_us_08_name_and_confirm():
             channel=Channel.browser,
         )
     )
-    assert "would you like anything else" in res_add.agent_text.lower()
+    assert_offer_more_items(res_add.agent_text)
 
     # Saying that's it before a name should ask for the name
     res_done_before_name = process_turn(

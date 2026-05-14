@@ -80,7 +80,8 @@ curl -s http://localhost:8000/voice/config-check
 Expected result:
 - `/health` returns status ok.
 - `/ready` returns ready components or degraded status as documented.
-- `/voice/config-check` reports Twilio missing fields without exposing secrets.
+- `/voice/config-check` is expected to show Twilio disabled or unconfigured.
+- Missing Twilio fields are expected in Mode A and are not a failure for this basic verification mode.
 - Browser fallback opens at `http://localhost:8000`.
 
 Browser fallback UI:
@@ -95,7 +96,9 @@ The browser UI is a fallback/walkthrough aid. The Twilio phone path is the prima
 
 Use this mode if you want to reproduce the real phone smoke test.
 
-Before running Docker, edit `.env` and set these required fields:
+Before running Docker:
+1. Start ngrok or cloudflared for local port `8000` and copy the public HTTPS base URL.
+2. Edit `.env` and set these required fields:
 - `ANTHROPIC_API_KEY=<your Anthropic API key>`
 - `ANTHROPIC_MODEL=claude-haiku-4-5`
 - `ENABLE_TWILIO=true`
@@ -110,9 +113,16 @@ Then run:
 docker compose up --build
 ```
 
-Then expose local port `8000` with ngrok or cloudflared and configure Twilio:
+Then configure Twilio using that same public base URL:
 - Voice webhook: `POST <PUBLIC_BASE_URL>/voice/incoming`
 - Status callback: `POST <PUBLIC_BASE_URL>/voice/status`
+
+If `.env` is changed after Docker is already running, restart the app:
+
+```bash
+docker compose down
+docker compose up --build
+```
 
 Then verify:
 
@@ -268,11 +278,20 @@ curl -s http://localhost:8000/voice/config-check
 
 For a real phone test:
 
-1. Set `ENABLE_TWILIO=true` and fill the Twilio values in `.env`.
-2. Fill `ANTHROPIC_API_KEY` and, for phone mode, the Twilio values in `.env`. Do not commit `.env`.
-3. Start the app with `docker compose up --build`.
-4. Expose port `8000` through ngrok or cloudflared.
-5. Set `TWILIO_WEBHOOK_BASE_URL` to that public base URL.
+1. Start ngrok or cloudflared for local port `8000` and copy the public HTTPS base URL.
+2. Edit `.env` and set:
+   - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_MODEL=claude-haiku-4-5`
+   - `ENABLE_TWILIO=true`
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_AUTH_TOKEN`
+   - `TWILIO_PHONE_NUMBER`
+   - `TWILIO_WEBHOOK_BASE_URL=<PUBLIC_BASE_URL>`
+3. Do not commit `.env`.
+4. Start the app with `docker compose up --build`.
+5. If `.env` was changed after Docker was already running, restart with:
+   - `docker compose down`
+   - `docker compose up --build`
 6. Verify:
    - `curl -s http://localhost:8000/health`
    - `curl -s http://localhost:8000/ready`
@@ -310,6 +329,36 @@ Use the browser UI for walkthrough and fallback verification only. It is not the
 - `pip-audit` note: it could not complete in the local sandbox because DNS resolution to `pypi.org` was unavailable
   - Reference: `reports/security.txt`
 
+## TA Grading Checklist
+
+1. Start the app with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+2. Verify the app locally:
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/voice/config-check
+```
+
+3. From the repository root on the host, run the automated grading commands. These commands execute through Docker Compose and do not require host Python packages or a local virtual environment:
+
+```bash
+make reproduce
+make test
+make lint
+make loadtest
+scripts/regenerate.sh
+```
+
+4. Open `docs/STORIES.md` and manually walk US-01 through US-10.
+5. Compare screenshots in `docs/assets/stories/`.
+6. Review `reports/phone_smoke_test.md` and `reports/walkthrough.md`.
+
 ## Troubleshooting
 
 - If Docker reports that port `8000` is already in use, stop the existing process or change the Docker port mapping before rerunning `docker compose up --build`.
@@ -335,10 +384,21 @@ Use the browser UI for walkthrough and fallback verification only. It is not the
 
 ## Reproducing Data and Indexes
 
+Official one-command replay:
+
+Run from the repository root on the host. This repository automation command executes through Docker Compose, does not replace `docker compose up --build`, and does not require host Python packages.
+
+```bash
+make reproduce
+```
+
+Helper commands for debugging the reproduction pipeline:
+
+Run from the repository root on the host:
+
 ```bash
 make download-data
 make download-models
-make reproduce
 ```
 
 Expected generated files:
@@ -348,6 +408,8 @@ Expected generated files:
 - `data/index/embeddings.npy`
 
 ## Running Tests
+
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
 
 ```bash
 make test
@@ -366,6 +428,8 @@ Targets:
 
 ## Linting and Security Checks
 
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
+
 ```bash
 make lint
 ```
@@ -381,6 +445,8 @@ Expected report:
 
 ## Load Testing
 
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
+
 ```bash
 make loadtest
 ```
@@ -393,6 +459,8 @@ Targets:
 - under 5 percent error rate
 
 ## Demo Walkthrough
+
+Run from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
 
 ```bash
 make demo
@@ -459,6 +527,8 @@ The phone call itself is the user interface; logs and debug routes provide gradi
 | Benchmarks | `reports/benchmarks.json` | `make loadtest` |
 | Walkthrough notes | `reports/walkthrough.md` | Manual walkthrough |
 | Git contributions | `reports/git_contributions.txt` | contribution report command |
+
+Run every `make ...` command in this table from the repository root on the host. These commands execute through Docker Compose and are not an alternative app startup path.
 
 ## Known Limitations
 

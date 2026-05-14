@@ -3,6 +3,7 @@ from starlette.requests import Request
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 
+from tests.assertions import assert_offer_more_items
 from restaurant_agent.api import (
     api_debug_session,
     voice_config_check,
@@ -229,7 +230,7 @@ async def test_voice_turn_adds_fish_tacos_and_burger() -> None:
     response_text = " ".join(
         _parse_twiml(response.body.decode("utf-8")).itertext()
     ).lower()
-    assert "would you like anything else" in response_text
+    assert_offer_more_items(response_text)
 
     session = find_session_by_twilio_call_sid("CA556")
     assert session is not None
@@ -268,7 +269,7 @@ async def test_voice_turn_pronoun_followup_adds_last_mentioned_item() -> None:
     second_text = " ".join(
         _parse_twiml(second_response.body.decode("utf-8")).itertext()
     ).lower()
-    assert "would you like anything else" in second_text
+    assert_offer_more_items(second_text)
 
     session_after = find_session_by_twilio_call_sid("CA559")
     assert session_after is not None
@@ -310,7 +311,7 @@ async def test_voice_turn_numeric_pronoun_followup_real_transcript_regression() 
     second_text = " ".join(
         _parse_twiml(second_response.body.decode("utf-8")).itertext()
     ).lower()
-    assert "would you like anything else" in second_text
+    assert_offer_more_items(second_text)
     assert "i'm not sure which item" not in second_text
 
     session_after = find_session_by_twilio_call_sid("CA559N")
@@ -402,7 +403,7 @@ async def test_voice_turn_ill_take_fish_tacos_and_burger_works_first_try() -> No
     response_text = " ".join(
         _parse_twiml(response.body.decode("utf-8")).itertext()
     ).lower()
-    assert "would you like anything else" in response_text
+    assert_offer_more_items(response_text)
 
     session = find_session_by_twilio_call_sid("CA560")
     assert session is not None

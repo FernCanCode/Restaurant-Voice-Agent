@@ -6,7 +6,6 @@ calls are made.
 
 from restaurant_agent.fallback_parser import parse_fallback_intent
 
-
 # ── Menu search ─────────────────────────────────────────────────────────
 
 

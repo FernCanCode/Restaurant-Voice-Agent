@@ -2,7 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+RUN pip install --no-cache-dir --upgrade pip==25.3 wheel==0.46.2
+
 COPY requirements.txt .
+RUN pip install --no-cache-dir torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY pyproject.toml .

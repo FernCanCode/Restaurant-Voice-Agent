@@ -1,4 +1,5 @@
 import pytest
+from tests.assertions import assert_grouped_quesadilla_summary, assert_offer_more_items
 from restaurant_agent.schemas import AgentTurnRequest, Channel
 from restaurant_agent.agent import start_session, process_turn
 
@@ -41,7 +42,7 @@ def test_us_07_summary_and_total():
 
     assert res.intent == "compute_total"
     assert "total" in res.agent_text.lower()
-    assert "would you like anything else" in res.agent_text.lower()
+    assert_offer_more_items(res.agent_text)
 
     # Readback
     req2 = AgentTurnRequest(
@@ -82,5 +83,5 @@ def test_us_07_duplicate_summary_lines_are_grouped():
         )
     )
     lowered = res.agent_text.lower()
-    assert "two veggie quesadillas" in lowered or "2 veggie quesadillas" in lowered
+    assert_grouped_quesadilla_summary(lowered)
     assert lowered.count("one veggie quesadilla") < 2

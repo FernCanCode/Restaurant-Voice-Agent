@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Union, cast
 
 import numpy as np
+import numpy.typing as npt
 from restaurant_agent.config import get_settings
+from restaurant_agent.embedding_model import load_sentence_transformer
 from restaurant_agent.menu_loader import load_menu
 from restaurant_agent.schemas import CanonicalMenu
 
@@ -81,18 +83,14 @@ def build_rag_index(
     }
 
     try:
-        # Try to import and load the sentence-transformers model
-        # type: ignore
-        from sentence_transformers import SentenceTransformer
-
         # Build only from a locally available embedding model. Reproduction can
         # pre-download it explicitly via `make download-models`.
-        model = SentenceTransformer(
-            "sentence-transformers/all-MiniLM-L6-v2",
-            local_files_only=True,
-        )
+        model = load_sentence_transformer(local_files_only=True)
         texts = [chunk["retrieval_text"] for chunk in chunks]
-        embeddings = model.encode(texts, show_progress_bar=False)
+        embeddings = cast(
+            npt.NDArray[np.float64],
+            model.encode(texts, show_progress_bar=False),
+        )
 
         np.save(idx_dir / "embeddings.npy", embeddings)
         metadata["retrieval_modes_available"].append("vector")

@@ -1,4 +1,5 @@
 import pytest
+from tests.assertions import assert_offer_more_items
 from restaurant_agent.schemas import AgentTurnRequest, Channel
 from restaurant_agent.agent import start_session, process_turn
 
@@ -26,7 +27,7 @@ def test_us_04_add_item_with_modification():
     assert item.item_id == "chicken_tacos"
     assert item.quantity == 2
     assert "no onions" in item.special_instructions
-    assert "would you like anything else" in res.agent_text.lower()
+    assert_offer_more_items(res.agent_text)
 
 
 @pytest.mark.user_story("US-04")
@@ -92,7 +93,7 @@ def test_us_04_multi_item_add_fish_tacos_and_burger():
 
     item_ids = [item.item_id for item in res.order.items]
     assert item_ids == ["crispy_fish_tacos", "classic_burger"]
-    assert "would you like anything else" in res.agent_text.lower()
+    assert_offer_more_items(res.agent_text)
 
 
 @pytest.mark.user_story("US-04")

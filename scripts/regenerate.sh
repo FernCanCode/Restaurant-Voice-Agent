@@ -2,6 +2,7 @@
 set -euo pipefail
 
 echo "Regenerating project data and retrieval artifacts from the committed raw menu fixture..."
+echo "Using Docker Compose-backed Makefile targets from the repository root."
 
 echo "Step 1: Preparing data..."
 make download-data

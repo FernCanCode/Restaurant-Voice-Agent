@@ -2,11 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8000}"
-PYTHON_BIN="${PYTHON_BIN:-python}"
-
-if [[ -x ".venv/bin/python" && "${PYTHON_BIN}" == "python" ]]; then
-  PYTHON_BIN=".venv/bin/python"
-fi
+DOCKER_COMPOSE_COMMAND="${DOCKER_COMPOSE_COMMAND:-docker compose}"
 
 if ! curl --silent --show-error --fail "${BASE_URL}/health" >/dev/null; then
   echo "App is not running at ${BASE_URL}."
@@ -31,7 +27,10 @@ echo "${session_response}"
 echo
 echo
 
-session_id="$(printf '%s' "${session_response}" | "${PYTHON_BIN}" -c 'import json,sys; print(json.load(sys.stdin)["session_id"])')"
+session_id="$(
+  printf '%s' "${session_response}" \
+    | ${DOCKER_COMPOSE_COMMAND} run --rm -T app python -c 'import json,sys; print(json.load(sys.stdin)["session_id"])'
+)"
 
 run_turn() {
   local utterance="$1"
