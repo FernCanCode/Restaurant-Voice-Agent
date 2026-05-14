@@ -80,17 +80,24 @@ Summarized dependencies:
 
 ## Clean Clone Setup
 
+Docker Compose is the only official grading/reproduction run path. Do not use a local Python virtual environment or direct Uvicorn run for grading. `.env` must never be committed, and `.env.example` contains placeholders only.
+
 ```bash
 git clone https://github.com/FernCanCode/Restaurant-Voice-Agent
 cd Restaurant-Voice-Agent
 cp .env.example .env
-# Edit .env placeholders as needed.
-# Placeholder values are acceptable for no-secret local health checks.
-# Fill ANTHROPIC_API_KEY for full LLM behavior.
-# Fill Twilio values only if testing the phone path.
 ```
 
 ## Docker Compose Startup
+
+Choose exactly one verification mode before running Docker Compose.
+
+### Mode A — Basic Docker Health/Readiness Check
+
+Use this mode if you only want to verify that the container starts and the local app is reachable.
+
+Required `.env` edits:
+- None. Leave placeholder values as-is.
 
 Official grading/reproduction command:
 
@@ -107,13 +114,56 @@ Expected result:
 - Twilio remains the primary production voice path when configured.
 - The container runtime uses Python 3.11 from `python:3.11-slim`.
 
-## Health and Readiness Checks
+Verification commands:
 
 ```bash
 curl -s http://localhost:8000/health
 curl -s http://localhost:8000/ready
 curl -s http://localhost:8000/voice/config-check
 ```
+
+Expected result:
+- `/health` returns status ok.
+- `/ready` returns ready components or degraded status as documented.
+- `/voice/config-check` reports Twilio missing fields without exposing secrets.
+- Browser fallback opens at `http://localhost:8000`.
+
+### Mode B — Full Twilio Phone + Anthropic Verification
+
+Use this mode if you want to reproduce the real phone smoke test.
+
+Before running Docker, edit `.env` and set these required fields:
+- `ANTHROPIC_API_KEY=<your Anthropic API key>`
+- `ANTHROPIC_MODEL=claude-haiku-4-5`
+- `ENABLE_TWILIO=true`
+- `TWILIO_ACCOUNT_SID=<your Twilio Account SID>`
+- `TWILIO_AUTH_TOKEN=<your Twilio Auth Token>`
+- `TWILIO_PHONE_NUMBER=<your Twilio phone number>`
+- `TWILIO_WEBHOOK_BASE_URL=<your public HTTPS tunnel URL>`
+
+Then run:
+
+```bash
+docker compose up --build
+```
+
+Then expose local port `8000` through ngrok or cloudflared and configure Twilio:
+- Voice webhook: `POST <PUBLIC_BASE_URL>/voice/incoming`
+- Status callback: `POST <PUBLIC_BASE_URL>/voice/status`
+
+Then verify:
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/voice/config-check
+```
+
+Expected result:
+- `/voice/config-check` shows enabled/configured true with no missing fields.
+- A real Twilio call can follow the script documented in `reports/phone_smoke_test.md`.
+
+## Health and Readiness Checks
 
 Expected health response:
 
